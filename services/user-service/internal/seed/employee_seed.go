@@ -39,7 +39,7 @@ func Run(db *gorm.DB) error {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			pos = model.Position{Title: title}
 			if err := db.Create(&pos).Error; err != nil {
-			  return err
+				return err
 			}
 		} else if err != nil {
 				return err
