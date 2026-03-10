@@ -140,7 +140,7 @@ func (s *EmployeeService) GetAllEmployees(ctx context.Context, query *dto.ListEm
 	return dto.ToEmployeeResponseList(employees, total, query.Page, query.PageSize), nil
 }
 
-func (s *EmployeeService) ForgotPassword(ctx context.Context, email string) error {
+func (s *EmployeeService) RequestPasswordReset(ctx context.Context, email string) error {
 	employee, err := s.repo.FindByEmail(ctx, email)
 	if err != nil {
 		return errors.InternalErr(err)
@@ -179,7 +179,7 @@ func (s *EmployeeService) ForgotPassword(ctx context.Context, email string) erro
 	return nil
 }
 
-func (s *EmployeeService) ResetPassword(ctx context.Context, code, newPassword string) error {
+func (s *EmployeeService) ConfirmPasswordReset(ctx context.Context, code, newPassword string) error {
 	resetToken, err := s.resetTokenRepo.FindByCode(ctx, code)
 	if err != nil {
 		return errors.InternalErr(err)

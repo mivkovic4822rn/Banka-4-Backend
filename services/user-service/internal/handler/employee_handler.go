@@ -86,7 +86,7 @@ func (h *EmployeeHandler) ForgotPassword(c *gin.Context) {
 	}
 
 	// Zove forgotPassword iz employee_service-a
-	if err := h.service.ForgotPassword(c.Request.Context(), req.Email); err != nil {
+	if err := h.service.RequestPasswordReset(c.Request.Context(), req.Email); err != nil {
 		c.Error(err)
 		return
 	}
@@ -101,7 +101,7 @@ func (h *EmployeeHandler) ResetPassword(c *gin.Context) {
 		c.Error(errors.BadRequestErr(err.Error()))
 		return
 	}
-	if err := h.service.ResetPassword(c.Request.Context(), req.Code, req.NewPassword); err != nil {
+	if err := h.service.ConfirmPasswordReset(c.Request.Context(), req.Code, req.NewPassword); err != nil {
 		c.Error(err)
 		return
 	}
