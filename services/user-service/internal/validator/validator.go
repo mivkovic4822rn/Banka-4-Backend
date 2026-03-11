@@ -8,5 +8,6 @@ import (
 func RegisterValidators() {
 	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
 		v.RegisterValidation("password", validatePassword)
+		v.RegisterValidation("permission", validatePermission)
 	}
 }

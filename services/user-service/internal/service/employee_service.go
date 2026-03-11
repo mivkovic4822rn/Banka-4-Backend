@@ -1,17 +1,18 @@
 package service
 
 import (
-  "common/pkg/errors"
+	"common/pkg/errors"
 	"common/pkg/jwt"
-  
+	"common/pkg/permission"
+
 	"context"
 	"fmt"
-  "time"
+	"time"
 
 	"crypto/rand"
 	"encoding/hex"
-  
-  "user-service/internal/config"
+
+	"user-service/internal/config"
 	"user-service/internal/dto"
 	"user-service/internal/model"
 	"user-service/internal/repository"
@@ -25,7 +26,7 @@ type EmployeeService struct {
 	resetTokenRepo repository.ResetTokenRepository
 	positionRepo   repository.PositionRepository
 	emailService   *EmailService
-  cfg            *config.Configuration
+	cfg            *config.Configuration
 }
 
 func NewEmployeeService(
@@ -36,7 +37,7 @@ func NewEmployeeService(
 		resetTokenRepo: resetTokenRepo,
 		positionRepo:   positionRepo,
 		emailService:   emailService,
-    cfg:            cfg,
+		cfg:            cfg,
 	}
 }
 
@@ -58,6 +59,7 @@ func (s *EmployeeService) Register(ctx context.Context, req *dto.CreateEmployeeR
 	if existingByUsername != nil {
 		return nil, errors.ConflictErr("username already in use")
 	}
+
 	employee := &model.Employee{
 		FirstName:   req.FirstName,
 		LastName:    req.LastName,
@@ -70,6 +72,7 @@ func (s *EmployeeService) Register(ctx context.Context, req *dto.CreateEmployeeR
 		Department:  req.Department,
 		PositionID:  req.PositionID,
 		Active:      req.Active,
+		Permissions: mapPermissions(0, req.Permissions),
 	}
 
 	if err := s.repo.Create(ctx, employee); err != nil {
@@ -197,6 +200,7 @@ func (s *EmployeeService) UpdateEmployee(ctx context.Context, id uint, req *dto.
 	employee.Department = req.Department
 	employee.PositionID = req.PositionID
 	employee.Active = req.Active
+	employee.Permissions = mapPermissions(employee.EmployeeID, req.Permissions)
 
 	if err := s.repo.Update(ctx, employee); err != nil {
 		return nil, errors.InternalErr(err)
@@ -309,6 +313,17 @@ func (s *EmployeeService) ConfirmPasswordReset(ctx context.Context, token, newPa
 	return nil
 }
 
+func mapPermissions(employeeID uint, permissions []permission.Permission) []model.EmployeePermission {
+	result := make([]model.EmployeePermission, len(permissions))
+	for i, p := range permissions {
+		result[i] = model.EmployeePermission{
+			EmployeeID: employeeID,
+			Permission: p,
+		}
+	}
+	return result
+}
+
 func (s *EmployeeService) Login(ctx context.Context, req *dto.LoginRequest) (*dto.LoginResponse, error) {
 	//Pronadji zaposlenog po email-u
 	employee, err := s.repo.FindByEmail(ctx, req.Email)
@@ -323,7 +338,7 @@ func (s *EmployeeService) Login(ctx context.Context, req *dto.LoginRequest) (*dt
 	if !employee.Active {
 		return nil, errors.ForbiddenErr("account is disabled")
 	}
-	
+
 	err = bcrypt.CompareHashAndPassword([]byte(employee.Password), []byte(req.Password))
 	if err != nil {
 		return nil, errors.UnauthorizedErr("invalid credentials")

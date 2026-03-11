@@ -1,8 +1,8 @@
 package seed
 
 import (
-	"time"
 	"errors"
+	"time"
 	"user-service/internal/model"
 
 	"golang.org/x/crypto/bcrypt"
@@ -35,14 +35,14 @@ func Run(db *gorm.DB) error {
 	for _, title := range positions {
 		var pos model.Position
 		err := db.Where("title = ?", title).First(&pos).Error
-		
+
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			pos = model.Position{Title: title}
 			if err := db.Create(&pos).Error; err != nil {
 				return err
 			}
 		} else if err != nil {
-				return err
+			return err
 		}
 
 		positionMap[title] = pos.PositionID
@@ -62,7 +62,7 @@ func Run(db *gorm.DB) error {
 
 		dob, err := time.Parse("2006-01-02", e.DateOfBirth)
 		if err != nil {
-    	return err
+			return err
 		}
 
 		employee := model.Employee{

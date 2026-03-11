@@ -1,6 +1,7 @@
 package model
 
 import (
+	"common/pkg/permission"
 	"time"
 )
 
@@ -19,4 +20,14 @@ type Employee struct {
 	Department  string `gorm:"size:100"`
 	PositionID  uint   `gorm:""`
 	Position    Position
+	Permissions []EmployeePermission `gorm:"foreignKey:EmployeeID"`
+}
+
+func (e *Employee) HasPermission(p permission.Permission) bool {
+	for _, ep := range e.Permissions {
+		if ep.Permission == p {
+			return true
+		}
+	}
+	return false
 }

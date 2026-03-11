@@ -25,6 +25,7 @@ func (r *employeeRepository) FindByEmail(ctx context.Context, email string) (*mo
 
 	result := r.db.
 		WithContext(ctx).
+		Preload("Permissions").
 		Where("email = ?", email).
 		First(&employee)
 
@@ -39,6 +40,7 @@ func (r *employeeRepository) FindByUserName(ctx context.Context, userName string
 	var employee model.Employee
 	result := r.db.
 		WithContext(ctx).
+		Preload("Permissions").
 		Where("username = ?", userName).
 		First(&employee)
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
@@ -48,12 +50,28 @@ func (r *employeeRepository) FindByUserName(ctx context.Context, userName string
 }
 
 func (r *employeeRepository) Update(ctx context.Context, employee *model.Employee) error {
-	return r.db.WithContext(ctx).Save(employee).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(employee).Error; err != nil {
+			return err
+		}
+
+		if err := tx.Where("employee_id = ?", employee.EmployeeID).Delete(&model.EmployeePermission{}).Error; err != nil {
+			return err
+		}
+
+		if len(employee.Permissions) > 0 {
+			if err := tx.Create(&employee.Permissions).Error; err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
 }
 
 func (r *employeeRepository) FindByID(ctx context.Context, id uint) (*model.Employee, error) {
 	var e model.Employee
-	result := r.db.WithContext(ctx).First(&e, id)
+	result := r.db.WithContext(ctx).Preload("Permissions").First(&e, id)
 
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		return nil, nil
@@ -70,9 +88,10 @@ func (r *employeeRepository) GetAll(ctx context.Context, email, firstName, lastN
 	var total int64
 
 	query := r.db.WithContext(ctx).
-    Model(&model.Employee{}).
-    Preload("Position").
-    Joins("LEFT JOIN positions ON positions.position_id = employees.position_id")
+		Model(&model.Employee{}).
+		Preload("Position").
+		Preload("Permissions").
+		Joins("LEFT JOIN positions ON positions.position_id = employees.position_id")
 
 	// Filter
 	if email != "" {
