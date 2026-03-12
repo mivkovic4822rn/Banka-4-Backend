@@ -248,3 +248,19 @@ func (h *EmployeeHandler) ChangePassword(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "New Password set successfully"})
 }
+
+func (h *EmployeeHandler) RefreshToken(c *gin.Context) {
+	var req dto.RefreshRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(errors.BadRequestErr(err.Error()))
+		return
+	}
+
+	res, err := h.service.RefreshToken(c.Request.Context(), req.RefreshToken)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, res)
+}

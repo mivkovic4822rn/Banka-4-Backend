@@ -35,14 +35,15 @@ func (c *DBConfig) DSN() string {
 }
 
 type Configuration struct {
-	Env       string
-	Port      string
-	DB        DBConfig
-	GrpcPort  string // unused for now until we add multiple microservices
-	JWTSecret string // Dodato za JWT
-	JWTExpiry int    // U minutima
-	SMTP      SMTPConfig
-	URLs      URLConfig
+	Env           string
+	Port          string
+	DB            DBConfig
+	GrpcPort      string // unused for now until we add multiple microservices
+	JWTSecret     string // Dodato za JWT
+	JWTExpiry     int    // U minutima
+	SMTP          SMTPConfig
+	URLs          URLConfig
+  RefreshExpiry int    // refresh token
 }
 
 func GetOrDefault(env string, defaultValue string) string {
@@ -65,8 +66,11 @@ func GetOrThrow(env string) string {
 func Load() *Configuration {
 	_ = godotenv.Load()
 
-	expiryStr := GetOrDefault("JWT_EXPIRY_HOURS", "24")
+	expiryStr := GetOrDefault("JWT_EXPIRY", "15")
 	expiry, _ := strconv.Atoi(expiryStr)
+	refreshExpiryStr := GetOrDefault("REFRESH_EXPIRY_MINUTES", "10080")
+	refreshExpiry, _ := strconv.Atoi(refreshExpiryStr)
+
 	return &Configuration{
 		Env:  GetOrDefault("ENV", "development"),
 		Port: GetOrDefault("PORT", "8080"),
@@ -77,8 +81,10 @@ func Load() *Configuration {
 			Password: GetOrThrow("DB_PASS"),
 			DBName:   GetOrThrow("DB_NAME"),
 		},
+
 		JWTSecret: GetOrThrow("JWT_SECRET"),
 		JWTExpiry: expiry,
+    RefreshExpiry: refreshExpiry,
 		SMTP: SMTPConfig{
 			Host: GetOrThrow("SMTP_HOST"),
 			Port: GetOrDefault("SMTP_PORT", "587"),

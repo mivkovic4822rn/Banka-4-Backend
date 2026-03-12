@@ -67,11 +67,12 @@ func SetupRoutes(r *gin.Engine, healthHandler *handler.HealthHandler, empHandler
 
 			protected := emp.Group("/")
 			protected.Use(auth.Middleware(verifier, permissions))
-			{
+      {
 				protected.POST("/register", auth.RequirePermission(permission.EmployeeCreate) ,empHandler.Register)
 				protected.PATCH("/:id", auth.RequirePermission(permission.EmployeeUpdate), empHandler.UpdateEmployee)
 				protected.GET("/", auth.RequirePermission(permission.EmployeeView), empHandler.ListEmployees)
 				protected.POST("/change-password", empHandler.ChangePassword)
+        protected.POST("/refresh", empHandler.RefreshToken)
 			}
 		}
 	}
