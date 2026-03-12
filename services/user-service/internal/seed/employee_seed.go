@@ -1,6 +1,8 @@
 package seed
 
 import (
+	"common/pkg/permission"
+
 	"errors"
 	"time"
 	"user-service/internal/model"
@@ -27,6 +29,7 @@ var employees = []struct {
 }{
 	{"Dimitrije", "Mijailovic", "M", "1985-05-01", "dimitrije@raf.rs", "123456789", "Street 1", "dimitrije", "pass123", true, "IT", "Developer"},
 	{"Petar", "Petrovic", "M", "1990-08-12", "petar@raf.rs", "987654321", "Street 2", "petar", "pass123", true, "HR", "HR"},
+	{"Admin", "Admin", "M", "1980-01-01", "admin@raf.rs", "000000000", "RAF", "admin", "admin123", true, "IT", "Manager"},
 }
 
 func Run(db *gorm.DB) error {
@@ -81,6 +84,31 @@ func Run(db *gorm.DB) error {
 		}
 
 		if err := db.Create(&employee).Error; err != nil {
+			return err
+		}
+	}
+
+	var admin model.Employee
+	if err := db.Where("email = ?", "admin@raf.rs").First(&admin).Error; err != nil {
+		return err
+	}
+
+	for _, p := range permission.All {
+		var existing model.EmployeePermission
+
+		err := db.Where("employee_id = ? AND permission = ?", admin.EmployeeID, string(p)).
+			First(&existing).Error
+
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			perm := model.EmployeePermission{
+				EmployeeID: admin.EmployeeID,
+				Permission: p,
+			}
+
+			if err := db.Create(&perm).Error; err != nil {
+				return err
+			}
+		} else if err != nil {
 			return err
 		}
 	}

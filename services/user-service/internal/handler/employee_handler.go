@@ -115,6 +115,33 @@ func (h *EmployeeHandler) ListEmployees(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
+// GetEmployee godoc
+// @Summary Get employee by ID
+// @Description Returns a single employee by their ID
+// @Tags employees
+// @Produce json
+// @Param id path int true "Employee ID"
+// @Success 200 {object} dto.EmployeeResponse
+// @Failure 400 {object} errors.AppError
+// @Failure 404 {object} errors.AppError
+// @Security BearerAuth
+// @Router /api/employees/{id} [get]
+func (h *EmployeeHandler) GetEmployee(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.Error(errors.BadRequestErr("invalid employee id"))
+		return
+	}
+
+	result, svcErr := h.service.GetEmployeeByID(c.Request.Context(), uint(id))
+	if svcErr != nil {
+		c.Error(svcErr)
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
 // UpdateEmployee godoc
 // @Summary Update employee profile
 // @Description Updates employee information by ID
