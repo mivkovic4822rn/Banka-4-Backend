@@ -104,7 +104,7 @@ func (r *employeeRepository) GetAll(ctx context.Context, email, firstName, lastN
 		query = query.Where("last_name ILIKE ?", "%"+lastName+"%")
 	}
 	if position != "" {
-		query = query.Where("positions.name ILIKE ?", "%"+position+"%")
+		query = query.Where("positions.title ILIKE ?", "%"+position+"%")
 	}
 
 	// Get total
@@ -120,4 +120,3 @@ func (r *employeeRepository) GetAll(ctx context.Context, email, firstName, lastN
 
 	return employees, total, nil
 }
-
