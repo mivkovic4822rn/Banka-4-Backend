@@ -40,8 +40,6 @@ func NewServer(lc fx.Lifecycle, cfg *config.Configuration, healthHandler *handle
 
 func InitRouter(r *gin.Engine, cfg *config.Configuration) {
 	r.Use(gin.Recovery())
-	r.Use(logging.Logger())
-	r.Use(errors.ErrorHandler())
 
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{cfg.URLs.FrontendBaseURL},
@@ -51,6 +49,9 @@ func InitRouter(r *gin.Engine, cfg *config.Configuration) {
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}))
+
+	r.Use(logging.Logger())
+	r.Use(errors.ErrorHandler())
 
 	// Registrujemo custom validator za password
 	validator.RegisterValidators()
@@ -73,12 +74,12 @@ func SetupRoutes(r *gin.Engine, healthHandler *handler.HealthHandler, empHandler
 
 			emp.POST("/refresh", empHandler.RefreshToken)
 
-			protected := emp.Group("/")
+			protected := emp.Group("")
 			protected.Use(auth.Middleware(verifier, permissions))
 			{
 				protected.POST("/register", auth.RequirePermission(permission.EmployeeCreate), empHandler.Register)
 				protected.PATCH("/:id", auth.RequirePermission(permission.EmployeeUpdate), empHandler.UpdateEmployee)
-				protected.GET("/", auth.RequirePermission(permission.EmployeeView), empHandler.ListEmployees)
+				protected.GET("", auth.RequirePermission(permission.EmployeeView), empHandler.ListEmployees)
 				protected.POST("/change-password", empHandler.ChangePassword)
 			}
 		}
