@@ -168,10 +168,8 @@ func (s *EmployeeService) UpdateEmployee(ctx context.Context, id uint, req *dto.
 		return nil, errors.NotFoundErr("employee not found")
 	}
 
-	// we make sure unique fields stay unique
-
-	if req.Email != employee.Email {
-		existing, err := s.repo.FindByEmail(ctx, req.Email)
+	if req.Email != nil && *req.Email != employee.Email {
+		existing, err := s.repo.FindByEmail(ctx, *req.Email)
 		if err != nil {
 			return nil, errors.InternalErr(err)
 		}
@@ -180,8 +178,8 @@ func (s *EmployeeService) UpdateEmployee(ctx context.Context, id uint, req *dto.
 		}
 	}
 
-	if req.Username != employee.Username {
-		existing, err := s.repo.FindByUserName(ctx, req.Username)
+	if req.Username != nil && *req.Username != employee.Username {
+		existing, err := s.repo.FindByUserName(ctx, *req.Username)
 		if err != nil {
 			return nil, errors.InternalErr(err)
 		}
@@ -190,8 +188,8 @@ func (s *EmployeeService) UpdateEmployee(ctx context.Context, id uint, req *dto.
 		}
 	}
 
-	if req.PositionID != employee.PositionID {
-		exists, err := s.positionRepo.Exists(ctx, req.PositionID)
+	if req.PositionID != nil && *req.PositionID != employee.PositionID {
+		exists, err := s.positionRepo.Exists(ctx, *req.PositionID)
 		if err != nil {
 			return nil, errors.InternalErr(err)
 		}
@@ -200,18 +198,21 @@ func (s *EmployeeService) UpdateEmployee(ctx context.Context, id uint, req *dto.
 		}
 	}
 
-	employee.FirstName = req.FirstName
-	employee.LastName = req.LastName
-	employee.Gender = req.Gender
-	employee.DateOfBirth = req.DateOfBirth
-	employee.Email = req.Email
-	employee.PhoneNumber = req.PhoneNumber
-	employee.Address = req.Address
-	employee.Username = req.Username
-	employee.Department = req.Department
-	employee.PositionID = req.PositionID
-	employee.Active = req.Active
-	employee.Permissions = mapPermissions(employee.EmployeeID, req.Permissions)
+	setIfNotNil(&employee.FirstName, req.FirstName)
+	setIfNotNil(&employee.LastName, req.LastName)
+	setIfNotNil(&employee.Gender, req.Gender)
+	setIfNotNil(&employee.DateOfBirth, req.DateOfBirth)
+	setIfNotNil(&employee.Email, req.Email)
+	setIfNotNil(&employee.PhoneNumber, req.PhoneNumber)
+	setIfNotNil(&employee.Address, req.Address)
+	setIfNotNil(&employee.Username, req.Username)
+	setIfNotNil(&employee.Department, req.Department)
+	setIfNotNil(&employee.PositionID, req.PositionID)
+	setIfNotNil(&employee.Active, req.Active)
+
+	if req.Permissions != nil {
+		employee.Permissions = mapPermissions(employee.EmployeeID, *req.Permissions)
+	}
 
 	if err := s.repo.Update(ctx, employee); err != nil {
 		return nil, errors.InternalErr(err)
@@ -340,6 +341,12 @@ func (s *EmployeeService) ConfirmPasswordReset(ctx context.Context, token, newPa
 	}
 
 	return nil
+}
+
+func setIfNotNil[T any](dst *T, src *T) {
+	if src != nil {
+		*dst = *src
+	}
 }
 
 func mapPermissions(employeeID uint, permissions []permission.Permission) []model.EmployeePermission {
