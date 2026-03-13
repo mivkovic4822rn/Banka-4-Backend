@@ -62,7 +62,6 @@ func TestLogin(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			svc := NewEmployeeService(tt.repo, &fakeActivationTokenRepo{}, &fakeResetTokenRepo{}, &fakeRefreshTokenRepo{}, &fakePositionRepo{}, &fakeMailer{}, testConfig())
 
 			res, err := svc.Login(context.Background(), tt.req)
@@ -151,7 +150,6 @@ func TestRegister(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			svc := NewEmployeeService(tt.repo, &fakeActivationTokenRepo{}, &fakeResetTokenRepo{}, &fakeRefreshTokenRepo{}, tt.positionRepo, tt.mailer, testConfig())
 
 			emp, err := svc.Register(context.Background(), req)
@@ -237,7 +235,6 @@ func TestActivateAccount(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			svc := NewEmployeeService(tt.empRepo, tt.tokenRepo, &fakeResetTokenRepo{}, &fakeRefreshTokenRepo{}, &fakePositionRepo{}, &fakeMailer{}, testConfig())
 
 			err := svc.ActivateAccount(context.Background(), tt.token, tt.password)
@@ -344,7 +341,6 @@ func TestUpdateEmployee(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			svc := NewEmployeeService(tt.empRepo, &fakeActivationTokenRepo{}, &fakeResetTokenRepo{}, &fakeRefreshTokenRepo{}, tt.positionRepo, &fakeMailer{}, testConfig())
 
 			result, err := svc.UpdateEmployee(context.Background(), tt.id, tt.req)
@@ -386,7 +382,6 @@ func TestGetAllEmployees(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			svc := NewEmployeeService(tt.repo, &fakeActivationTokenRepo{}, &fakeResetTokenRepo{}, &fakeRefreshTokenRepo{}, &fakePositionRepo{}, &fakeMailer{}, testConfig())
 
 			res, err := svc.GetAllEmployees(context.Background(), &dto.ListEmployeesQuery{Page: 1, PageSize: 10})
@@ -478,7 +473,6 @@ func TestRefreshToken(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			svc := NewEmployeeService(tt.empRepo, &fakeActivationTokenRepo{}, &fakeResetTokenRepo{}, tt.refreshRepo, &fakePositionRepo{}, &fakeMailer{}, testConfig())
 
 			res, err := svc.RefreshToken(context.Background(), tt.token)
@@ -557,7 +551,6 @@ func TestConfirmPasswordReset(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			svc := NewEmployeeService(tt.empRepo, &fakeActivationTokenRepo{}, tt.resetRepo, &fakeRefreshTokenRepo{}, &fakePositionRepo{}, &fakeMailer{}, testConfig())
 
 			err := svc.ConfirmPasswordReset(context.Background(), tt.token, tt.password)
@@ -614,7 +607,6 @@ func TestRequestPasswordReset(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			svc := NewEmployeeService(tt.empRepo, &fakeActivationTokenRepo{}, tt.resetRepo, &fakeRefreshTokenRepo{}, &fakePositionRepo{}, &fakeMailer{}, testConfig())
 
 			err := svc.RequestPasswordReset(context.Background(), tt.email)
@@ -695,7 +687,6 @@ func TestConfirmChangePassword(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			svc := NewEmployeeService(tt.empRepo, &fakeActivationTokenRepo{}, &fakeResetTokenRepo{}, &fakeRefreshTokenRepo{}, &fakePositionRepo{}, &fakeMailer{}, testConfig())
 
 			err := svc.ConfirmChangePassword(tt.ctx, tt.oldPassword, tt.newPassword)

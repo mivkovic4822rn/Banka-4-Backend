@@ -140,7 +140,11 @@ func testConfig() *config.Configuration {
 }
 
 func hashedPassword(plain string) string {
-	h, _ := bcrypt.GenerateFromPassword([]byte(plain), bcrypt.MinCost)
+	h, err := bcrypt.GenerateFromPassword([]byte(plain), bcrypt.MinCost)
+	if err != nil {
+		panic(err)
+	}
+
 	return string(h)
 }
 
