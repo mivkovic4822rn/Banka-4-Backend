@@ -1,6 +1,7 @@
 package service
 
 import (
+	"common/pkg/permission"
 	"context"
 	"fmt"
 	"testing"
@@ -128,6 +129,9 @@ func TestUpdateEmployee(t *testing.T) {
 	existing := activeEmployee()
 	existing.PositionID = 1
 
+	existingAdmin := activeEmployee()
+	existingAdmin.Permissions = mapPermissions(existing.PositionID, permission.All)
+
 	identity := activeIdentity()
 
 	req := &dto.UpdateEmployeeRequest{
@@ -165,6 +169,17 @@ func TestUpdateEmployee(t *testing.T) {
 			req:          req,
 			expectErr:    true,
 			errMsg:       "employee not found",
+		},
+		{
+			// TODO: Test for ability for other admins, or the admin themselves, to update their details?
+			name:         "employee is admin",
+			empRepo:      &fakeEmployeeRepo{byID: existingAdmin},
+			identityRepo: &fakeIdentityRepo{byID: identity},
+			positionRepo: &fakePositionRepo{},
+			id:           2,
+			req:          req,
+			expectErr:    true,
+			errMsg:       "cannot modify admin",
 		},
 		{
 			name:         "email conflict",
