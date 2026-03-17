@@ -53,10 +53,13 @@ func main() {
 			handler.NewHealthHandler,
 			repository.NewAccountRepository,
 			repository.NewCompanyRepository,
+			repository.NewPaymentRepository,
 			service.NewAccountService,
 			service.NewCompanyService,
+			service.NewPaymentService,
 			handler.NewAccountHandler,
 			handler.NewCompanyHandler,
+			handler.NewPaymentHandler,
 		),
 		fx.Invoke(func(cfg *config.Configuration) error {
 			return logging.Init(cfg.Env)
@@ -67,6 +70,7 @@ func main() {
 				&model.WorkCode{},
 				&model.Company{},
 				&model.Account{},
+				&model.Payment{},
 			); err != nil {
 				return err
 			}
