@@ -33,13 +33,26 @@ func NewServer(
 	paymentHandler *handler.PaymentHandler,
 	cardHandler *handler.CardHandler,
 	loanHandler *handler.LoanHandler,
+	transferHandler *handler.TransferHandler,
 	verifier auth.TokenVerifier,
 	permissions auth.PermissionProvider,
 ) {
 	r := gin.New()
 
 	InitRouter(r, cfg)
-	SetupRoutes(r, healthHandler, accountHandler, companyHandler, payeeHandler, exchangeHandler, paymentHandler,  cardHandler, loanHandler, verifier, permissions)
+	SetupRoutes(r,
+		healthHandler,
+		accountHandler,
+		companyHandler,
+		transferHandler,
+		payeeHandler,
+		exchangeHandler,
+		paymentHandler,
+		cardHandler,
+		loanHandler,
+		verifier,
+		permissions,
+	)
 
 	server := &http.Server{
 		Addr:    ":" + cfg.Port,
@@ -72,6 +85,7 @@ func SetupRoutes(
 	healthHandler *handler.HealthHandler,
 	accountHandler *handler.AccountHandler,
 	companyHandler *handler.CompanyHandler,
+	transferHandler *handler.TransferHandler,
 	payeeHandler *handler.PayeeHandler,
 	exchangeHandler *handler.ExchangeHandler,
 	paymentHandler *handler.PaymentHandler,
@@ -90,7 +104,7 @@ func SetupRoutes(
 		accounts.Use(auth.Middleware(verifier, permissions))
 		{
 			accounts.POST("", accountHandler.Create)
-      accounts.GET("/:accountId/cards", auth.RequireIdentityType(auth.IdentityClient, auth.IdentityEmployee), cardHandler.ListCardsByAccount)
+			accounts.GET("/:accountId/cards", auth.RequireIdentityType(auth.IdentityClient, auth.IdentityEmployee), cardHandler.ListCardsByAccount)
 			//TODO employee list all accounts here?
 		}
 
@@ -131,6 +145,9 @@ func SetupRoutes(
 			payees.DELETE("/:id", payeeHandler.Delete)
 		}
 
+		transfers := api.Group("/transfers")
+		transfers.Use(auth.Middleware(verifier, permissions))
+
 		cards := api.Group("/cards")
 		cards.Use(auth.Middleware(verifier, permissions))
 		{
@@ -139,14 +156,20 @@ func SetupRoutes(
 			cards.PUT("/:cardId/block", auth.RequireIdentityType(auth.IdentityClient, auth.IdentityEmployee), cardHandler.BlockCard)
 			cards.PUT("/:cardId/unblock", auth.RequireIdentityType(auth.IdentityEmployee), cardHandler.UnblockCard)
 			cards.PUT("/:cardId/deactivate", auth.RequireIdentityType(auth.IdentityEmployee), cardHandler.DeactivateCard)
-    }
-    
+		}
+
 		exchange := api.Group("/exchange")
 		{
 			exchange.GET("/rates", exchangeHandler.GetRates)
 			exchange.GET("/calculate", exchangeHandler.Calculate)
 		}
 
+		payments := api.Group("/payments")
+		payments.Use(auth.Middleware(verifier, permissions))
+		{
+			transfers.POST("", transferHandler.ExecuteTransfer)
+			transfers.GET("", transferHandler.GetTransferHistory)
+		}
 
 		clientLoans := api.Group("/client/:client_id/loans")
 		clientLoans.Use(auth.Middleware(verifier, permissions))
