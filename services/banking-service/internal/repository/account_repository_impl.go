@@ -4,6 +4,7 @@ import (
 	"banking-service/internal/model"
 	"common/pkg/db"
 	"context"
+	"errors"
 
 	"gorm.io/gorm"
 )
@@ -36,7 +37,12 @@ func (r *accountRepository) FindByAccountNumber(ctx context.Context, accountNumb
 	db := db.DBFromContext(ctx, r.db)
 
 	var account model.Account
-	if err := db.WithContext(ctx).Preload("Currency").First(&account, accountNumber).Error; err != nil {
+	err := db.WithContext(ctx).Preload("Currency").First(&account, accountNumber).Error
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
 		return nil, err
 	}
 	return &account, nil

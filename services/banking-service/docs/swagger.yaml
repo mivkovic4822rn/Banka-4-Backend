@@ -1,10 +1,340 @@
+definitions:
+  dto.AccountCardsResponse:
+    properties:
+      account_name:
+        type: string
+      account_number:
+        type: string
+      cards:
+        items:
+          $ref: '#/definitions/dto.CardResponse'
+        type: array
+    type: object
+  dto.AuthorizedPersonRequest:
+    properties:
+      address:
+        type: string
+      date_of_birth:
+        type: string
+      email:
+        type: string
+      first_name:
+        maxLength: 20
+        type: string
+      gender:
+        type: string
+      last_name:
+        maxLength: 100
+        type: string
+      phone_number:
+        type: string
+    required:
+    - email
+    - first_name
+    - last_name
+    type: object
+  dto.CardResponse:
+    properties:
+      account_name:
+        type: string
+      account_number:
+        type: string
+      authorized_person_id:
+        type: integer
+      card_brand:
+        type: string
+      card_number:
+        type: string
+      card_type:
+        type: string
+      expires_at:
+        type: string
+      id:
+        type: integer
+      limit:
+        type: number
+      name:
+        type: string
+      status:
+        type: string
+    type: object
+  dto.ConfirmCardRequest:
+    properties:
+      account_number:
+        type: string
+      confirmation_code:
+        type: string
+    required:
+    - account_number
+    - confirmation_code
+    type: object
+  dto.MessageResponse:
+    properties:
+      message:
+        type: string
+    type: object
+  dto.RequestCardRequest:
+    properties:
+      account_number:
+        type: string
+      authorized_person:
+        $ref: '#/definitions/dto.AuthorizedPersonRequest'
+    required:
+    - account_number
+    type: object
+  errors.AppError:
+    properties:
+      message:
+        type: string
+      status:
+        type: string
+      timestamp:
+        type: string
+    type: object
 info:
   contact: {}
   description: API for managing accounts, balances, and banking operations.
   title: Banking Service API
   version: "1.0"
 paths:
-  /health:
+  /api/accounts/{accountId}/cards:
+    get:
+      description: Returns cards for the specified account. Clients can access only
+        their own accounts, while employees can access any account.
+      parameters:
+      - description: Account number
+        in: path
+        name: accountId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.AccountCardsResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: List cards for an account
+      tags:
+      - cards
+  /api/cards/{cardId}/block:
+    put:
+      description: Blocks a card. Clients can block only their own cards, while employees
+        can block any card.
+      parameters:
+      - description: Card ID
+        in: path
+        name: cardId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.CardResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Block a card
+      tags:
+      - cards
+  /api/cards/{cardId}/deactivate:
+    put:
+      description: Deactivates a card permanently. Only employees can perform this
+        action.
+      parameters:
+      - description: Card ID
+        in: path
+        name: cardId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.CardResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Deactivate a card
+      tags:
+      - cards
+  /api/cards/{cardId}/unblock:
+    put:
+      description: Unblocks a blocked card. Only employees can perform this action.
+      parameters:
+      - description: Card ID
+        in: path
+        name: cardId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.CardResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Unblock a card
+      tags:
+      - cards
+  /api/cards/request:
+    post:
+      consumes:
+      - application/json
+      description: Client requests a new card for their account. The request is confirmed
+        later using a confirmation code.
+      parameters:
+      - description: Card request payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RequestCardRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.MessageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Request a new card
+      tags:
+      - cards
+  /api/cards/request/confirm:
+    post:
+      consumes:
+      - application/json
+      description: Confirms a pending card request using the confirmation code and
+        creates the card.
+      parameters:
+      - description: Confirmation payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ConfirmCardRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.CardResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Confirm a card request
+      tags:
+      - cards
+  /api/health:
     get:
       description: Returns service health status
       produces:

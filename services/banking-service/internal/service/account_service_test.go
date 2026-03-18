@@ -36,6 +36,10 @@ func (r *fakeAccountRepo) FindByAccountNumber(_ context.Context, _ string) (*mod
 	return nil, nil
 }
 
+func (r *fakeAccountRepo) FindByAccountNumber(_ context.Context, _ string) (*model.Account, error) {
+	return nil, nil
+}
+
 func (r *fakeAccountRepo) UpdateBalance(_ context.Context, _ *model.Account) error {
 	return nil
 }

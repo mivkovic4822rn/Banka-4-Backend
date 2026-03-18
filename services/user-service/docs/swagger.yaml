@@ -55,7 +55,7 @@ definitions:
       email:
         type: string
       first_name:
-        maxLength: 50
+        maxLength: 20
         type: string
       gender:
         type: string
