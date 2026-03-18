@@ -14,9 +14,12 @@ import (
 // ── Fake Payment Repo ──────────────────────────────────────────────
 
 type fakePaymentRepo struct {
-	createErr error
-	getErr    error
-	payment   *model.Payment
+	createErr      error
+	getErr         error
+	findAllErr     error
+	payment        *model.Payment
+	allPayments    []model.Payment
+	capturedFilter repository.PaymentFilter
 }
 
 func (f *fakePaymentRepo) Create(ctx context.Context, p *model.Payment) error {
@@ -38,6 +41,14 @@ func (f *fakePaymentRepo) GetByID(ctx context.Context, id uint) (*model.Payment,
 func (f *fakePaymentRepo) Update(ctx context.Context, p *model.Payment) error {
 	f.payment = p
 	return nil
+}
+
+func (f *fakePaymentRepo) FindAllByClientID(ctx context.Context, clientID uint, filter repository.PaymentFilter) ([]model.Payment, error) {
+	f.capturedFilter = filter
+	if f.findAllErr != nil {
+		return nil, f.findAllErr
+	}
+	return f.allPayments, nil
 }
 
 type fakeTransactionRepo struct {
@@ -317,6 +328,104 @@ func TestCreatePayment_RecipientNotFound(t *testing.T) {
 	payment, err := svc.CreatePayment(context.Background(), req)
 	require.Nil(t, payment)
 	require.Error(t, err)
+}
+
+func TestGetFilteredPayments_Success(t *testing.T) {
+	clientID := uint(1)
+	repo := &fakePaymentRepo{
+		allPayments: []model.Payment{
+			{PaymentID: 1, RecipientName: "Ana"},
+			{PaymentID: 2, RecipientName: "Marko"},
+		},
+	}
+
+	svc := newTestPaymentService(repo, &fakeTransactionRepo{}, newFakePaymentAccountRepo(), &fakeExchangeService{})
+
+	payees, err := svc.GetFilteredPayments(ctxWithClient(clientID), repository.PaymentFilter{})
+	require.NoError(t, err)
+	require.Len(t, payees, 2)
+}
+
+func TestGetFilteredPayments_Unauthorized(t *testing.T) {
+	svc := newTestPaymentService(&fakePaymentRepo{}, &fakeTransactionRepo{}, newFakePaymentAccountRepo(), &fakeExchangeService{})
+
+	payees, err := svc.GetFilteredPayments(context.Background(), repository.PaymentFilter{})
+	require.Nil(t, payees)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not authenticated as client")
+}
+
+func TestGetFilteredPayments_RepoError(t *testing.T) {
+	repo := &fakePaymentRepo{findAllErr: errors.New("db error")}
+	svc := newTestPaymentService(repo, &fakeTransactionRepo{}, newFakePaymentAccountRepo(), &fakeExchangeService{})
+
+	payees, err := svc.GetFilteredPayments(ctxWithClient(1), repository.PaymentFilter{})
+	require.Nil(t, payees)
+	require.Error(t, err)
+}
+
+func TestGetPaymentByID_Success(t *testing.T) {
+	payerAccount := &model.Account{
+		AccountNumber: "111",
+		ClientID:      1,
+	}
+	repo := &fakePaymentRepo{
+		payment: &model.Payment{
+			PaymentID:     1,
+			RecipientName: "Stefan",
+			Transaction: model.Transaction{
+				PayerAccountNumber: "111",
+			},
+		},
+	}
+
+	svc := newTestPaymentService(repo, &fakeTransactionRepo{}, newFakePaymentAccountRepo(payerAccount), &fakeExchangeService{})
+
+	payment, err := svc.GetPaymentByID(ctxWithClient(1), 1)
+	require.NoError(t, err)
+	require.Equal(t, "Stefan", payment.RecipientName)
+}
+
+func TestGetPaymentByID_NotFound(t *testing.T) {
+	repo := &fakePaymentRepo{getErr: errors.New("not found")}
+	svc := newTestPaymentService(repo, &fakeTransactionRepo{}, newFakePaymentAccountRepo(), &fakeExchangeService{})
+
+	payment, err := svc.GetPaymentByID(ctxWithClient(1), 99)
+	require.Nil(t, payment)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "payment not found")
+}
+
+func TestGetPaymentByID_Unauthorized(t *testing.T) {
+	svc := newTestPaymentService(&fakePaymentRepo{}, &fakeTransactionRepo{}, newFakePaymentAccountRepo(), &fakeExchangeService{})
+
+	payment, err := svc.GetPaymentByID(context.Background(), 1)
+	require.Nil(t, payment)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not authenticated as client")
+}
+
+func TestGetPaymentByID_Forbidden(t *testing.T) {
+	payerAccount := &model.Account{
+		AccountNumber: "111",
+		ClientID:      2,
+	}
+	repo := &fakePaymentRepo{
+		payment: &model.Payment{
+			PaymentID:     1,
+			RecipientName: "Stefan",
+			Transaction: model.Transaction{
+				PayerAccountNumber: "111",
+			},
+		},
+	}
+
+	svc := newTestPaymentService(repo, &fakeTransactionRepo{}, newFakePaymentAccountRepo(payerAccount), &fakeExchangeService{})
+
+	payment, err := svc.GetPaymentByID(ctxWithClient(1), 1)
+	require.Nil(t, payment)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "payment not found")
 }
 
 func TestCreatePayment_TransactionRepoError(t *testing.T) {
