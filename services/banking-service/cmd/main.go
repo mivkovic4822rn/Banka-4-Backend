@@ -61,6 +61,7 @@ func main() {
 			repository.NewAuthorizedPersonRepository,
 			repository.NewCardRequestRepository,
 			repository.NewExchangeRateRepository,
+			repository.NewCurrencyRepository,
 			service.NewExchangeService,
 			func(svc *service.ExchangeService) service.CurrencyConverter {
 				return svc
@@ -72,13 +73,13 @@ func main() {
 			service.NewCompanyService,
 			service.NewPaymentService,
 			service.NewTransactionProcessor,
-      service.NewCardService,
+			service.NewCardService,
 			service.NewEmailService,
 			handler.NewAccountHandler,
 			handler.NewCompanyHandler,
 			handler.NewExchangeHandler,
 			handler.NewPaymentHandler,
-      handler.NewCardHandler,
+			handler.NewCardHandler,
 		),
 		fx.Invoke(func(cfg *config.Configuration) error {
 			return logging.Init(cfg.Env)

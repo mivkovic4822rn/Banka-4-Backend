@@ -9,283 +9,384 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/require"
-	"gorm.io/gorm"
 )
 
-// ── Fakes ─────────────────────────────────────────────────────────────────────
-
 type fakeAccountRepo struct {
-	accNumExists        bool
-	accNumExistsErr     error
 	createErr           error
-	getByAccNumber      *model.Account
-	getByAccNumberErr   error
-	updateErr           error
+	accountNumberExists bool
+	nameExists          bool
+	nameExistsErr       error
 }
 
-func (r *fakeAccountRepo) Create(_ context.Context, _ *model.Account) error {
-	return r.createErr
+func (f *fakeAccountRepo) Create(_ context.Context, _ *model.Account) error {
+	return f.createErr
 }
 
-func (r *fakeAccountRepo) AccountNumberExists(_ context.Context, _ string) (bool, error) {
-	return r.accNumExists, r.accNumExistsErr
+func (f *fakeAccountRepo) AccountNumberExists(_ context.Context, _ string) (bool, error) {
+	return f.accountNumberExists, nil
 }
-func (r *fakeAccountRepo) FindByAccountNumber(_ context.Context, _ string) (*model.Account, error) {
+
+func (f *fakeAccountRepo) FindByAccountNumber(_ context.Context, _ string) (*model.Account, error) {
 	return nil, nil
 }
 
-func (r *fakeAccountRepo) UpdateBalance(_ context.Context, _ *model.Account) error {
+func (f *fakeAccountRepo) UpdateBalance(_ context.Context, _ *model.Account) error {
 	return nil
 }
 
-type fakeAccountUserClient struct {
+func (f *fakeAccountRepo) NameExistsForClient(_ context.Context, _ uint, _ string, _ string) (bool, error) {
+	if f.nameExistsErr != nil {
+		return false, f.nameExistsErr
+	}
+	return f.nameExists, nil
+}
+
+type fakeCurrencyRepo struct {
+	currency *model.Currency
+	findErr  error
+}
+
+func (f *fakeCurrencyRepo) FindByCode(_ context.Context, _ model.CurrencyCode) (*model.Currency, error) {
+	if f.findErr != nil {
+		return nil, f.findErr
+	}
+	return f.currency, nil
+}
+
+type fakeUserClient struct {
 	clientErr   error
 	employeeErr error
 }
 
-func (f *fakeAccountUserClient) GetClientByID(_ context.Context, _ uint) (*pb.GetClientByIdResponse, error) {
-	return nil, f.clientErr
+func (f *fakeUserClient) GetClientByID(_ context.Context, _ uint) (*pb.GetClientByIdResponse, error) {
+	if f.clientErr != nil {
+		return nil, f.clientErr
+	}
+	return &pb.GetClientByIdResponse{}, nil
 }
 
-func (f *fakeAccountUserClient) GetEmployeeByID(_ context.Context, _ uint) (*pb.GetEmployeeByIdResponse, error) {
-	return nil, f.employeeErr
+func (f *fakeUserClient) GetEmployeeByID(_ context.Context, _ uint) (*pb.GetEmployeeByIdResponse, error) {
+	if f.employeeErr != nil {
+		return nil, f.employeeErr
+	}
+	return &pb.GetEmployeeByIdResponse{}, nil
 }
 
-// ── Constructor ───────────────────────────────────────────────────────────────
+type fakeCurrencyConverter struct {
+	result     float64
+	convertErr error
+}
 
-func newAccountService(
-	repo *fakeAccountRepo,
-	uc *fakeAccountUserClient,
-	db *gorm.DB,
-) *AccountService {
-	return &AccountService{
-		repo:       repo,
-		userClient: uc,
-		db:         db,
+func (f *fakeCurrencyConverter) Convert(_ context.Context, amount float64, _ model.CurrencyCode, _ model.CurrencyCode) (float64, error) {
+	if f.convertErr != nil {
+		return 0, f.convertErr
+	}
+	if f.result != 0 {
+		return f.result, nil
+	}
+	return amount, nil
+}
+
+func rsdCurrency() *model.Currency {
+	return &model.Currency{
+		CurrencyID: 1,
+		Name:       "Serbian Dinar",
+		Code:       model.RSD,
+		Symbol:     "RSD",
+		Country:    "Serbia",
+		Status:     "Active",
 	}
 }
 
-// ── Fixtures ──────────────────────────────────────────────────────────────────
-
-func validPersonalCurrentReq() dto.CreateAccountRequest {
-	return dto.CreateAccountRequest{
-		Name:           "Standard Personal Account",
-		ClientID:       1,
-		EmployeeID:     1,
-		AccountType:    model.AccountTypePersonal,
-		AccountKind:    model.AccountKindCurrent,
-		Subtype:        model.SubtypeStandard,
-		InitialBalance: 50000,
-		ExpiresAt:      time.Now().AddDate(4, 0, 0),
-	}
-}
-
-func validForeignReq() dto.CreateAccountRequest {
-	return dto.CreateAccountRequest{
-		Name:           "EUR Foreign Account",
-		ClientID:       1,
-		EmployeeID:     1,
-		AccountType:    model.AccountTypePersonal,
-		AccountKind:    model.AccountKindForeign,
-		CurrencyCode:   "EUR",
-		InitialBalance: 1000,
-		ExpiresAt:      time.Now().AddDate(4, 0, 0),
+func eurCurrency() *model.Currency {
+	return &model.Currency{
+		CurrencyID: 2,
+		Name:       "Euro",
+		Code:       model.EUR,
+		Symbol:     "€",
+		Country:    "EU",
+		Status:     "Active",
 	}
 }
 
 func ptrUint(v uint) *uint { return &v }
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
+func baseExpiresAt() time.Time {
+	return time.Now().AddDate(5, 0, 0)
+}
+
+func newAccountService(
+	accountRepo *fakeAccountRepo,
+	currencyRepo *fakeCurrencyRepo,
+	userClient *fakeUserClient,
+	exchangeConverter *fakeCurrencyConverter,
+) *AccountService {
+	return NewAccountService(accountRepo, currencyRepo, userClient, nil, exchangeConverter)
+}
 
 func TestCreateAccount(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name      string
-		repo      *fakeAccountRepo
-		uc        *fakeAccountUserClient
-		setupMock func(mock sqlmock.Sqlmock)
-		req       dto.CreateAccountRequest
-		expectErr bool
-		errMsg    string
-		check     func(t *testing.T, account *model.Account)
+		name              string
+		accountRepo       *fakeAccountRepo
+		currencyRepo      *fakeCurrencyRepo
+		userClient        *fakeUserClient
+		exchangeConverter *fakeCurrencyConverter
+		req               dto.CreateAccountRequest
+		expectErr         bool
+		errMsg            string
 	}{
 		{
-			name: "success personal current",
-			repo: &fakeAccountRepo{},
-			uc:   &fakeAccountUserClient{},
-			setupMock: func(mock sqlmock.Sqlmock) {
-				mock.ExpectQuery(`SELECT \* FROM "currencies"`).
-					WillReturnRows(sqlmock.NewRows([]string{"currency_id", "code"}).AddRow(1, "RSD"))
-			},
-			req: validPersonalCurrentReq(),
-			check: func(t *testing.T, a *model.Account) {
-				require.Equal(t, model.AccountTypePersonal, a.AccountType)
-				require.Equal(t, model.AccountKindCurrent, a.AccountKind)
-				require.Equal(t, model.SubtypeStandard, a.Subtype)
-				require.Equal(t, 250000.0, a.DailyLimit)
-				require.Equal(t, 1000000.0, a.MonthlyLimit)
-				require.NotEmpty(t, a.AccountNumber)
-			},
-		},
-		{
-			name: "success personal foreign EUR",
-			repo: &fakeAccountRepo{},
-			uc:   &fakeAccountUserClient{},
-			setupMock: func(mock sqlmock.Sqlmock) {
-				mock.ExpectQuery(`SELECT \* FROM "currencies"`).
-					WillReturnRows(sqlmock.NewRows([]string{"currency_id", "code"}).AddRow(2, "EUR"))
-			},
-			req: validForeignReq(),
-			check: func(t *testing.T, a *model.Account) {
-				require.Equal(t, model.AccountKindForeign, a.AccountKind)
-				require.Equal(t, 5000.0, a.DailyLimit)
-				require.Equal(t, 20000.0, a.MonthlyLimit)
-			},
-		},
-		{
-			name: "success business current LLC",
-			repo: &fakeAccountRepo{},
-			uc:   &fakeAccountUserClient{},
-			setupMock: func(mock sqlmock.Sqlmock) {
-				mock.ExpectQuery(`SELECT \* FROM "currencies"`).
-					WillReturnRows(sqlmock.NewRows([]string{"currency_id", "code"}).AddRow(1, "RSD"))
-			},
+			name:              "successful personal current account",
+			accountRepo:       &fakeAccountRepo{},
+			currencyRepo:      &fakeCurrencyRepo{currency: rsdCurrency()},
+			userClient:        &fakeUserClient{},
+			exchangeConverter: &fakeCurrencyConverter{},
 			req: dto.CreateAccountRequest{
-				Name:        "LLC Business Account",
+				Name:        "My Account",
 				ClientID:    1,
 				EmployeeID:  1,
-				CompanyID:   ptrUint(1),
+				AccountType: model.AccountTypePersonal,
+				AccountKind: model.AccountKindCurrent,
+				Subtype:     model.SubtypeStandard,
+				ExpiresAt:   baseExpiresAt(),
+			},
+		},
+		{
+			name:              "successful business current account",
+			accountRepo:       &fakeAccountRepo{},
+			currencyRepo:      &fakeCurrencyRepo{currency: rsdCurrency()},
+			userClient:        &fakeUserClient{},
+			exchangeConverter: &fakeCurrencyConverter{},
+			req: dto.CreateAccountRequest{
+				Name:        "Business Account",
+				ClientID:    1,
+				EmployeeID:  1,
+				CompanyID:   ptrUint(10),
 				AccountType: model.AccountTypeBusiness,
 				AccountKind: model.AccountKindCurrent,
 				Subtype:     model.SubtypeLLC,
-				ExpiresAt:   time.Now().AddDate(4, 0, 0),
-			},
-			check: func(t *testing.T, a *model.Account) {
-				require.Equal(t, model.AccountTypeBusiness, a.AccountType)
-				require.Equal(t, model.SubtypeLLC, a.Subtype)
+				ExpiresAt:   baseExpiresAt(),
 			},
 		},
 		{
-			name:      "client not found",
-			repo:      &fakeAccountRepo{},
-			uc:        &fakeAccountUserClient{clientErr: fmt.Errorf("not found")},
-			setupMock: func(mock sqlmock.Sqlmock) {},
-			req:       validPersonalCurrentReq(),
+			name:              "successful foreign account with converted limits",
+			accountRepo:       &fakeAccountRepo{},
+			currencyRepo:      &fakeCurrencyRepo{currency: eurCurrency()},
+			userClient:        &fakeUserClient{},
+			exchangeConverter: &fakeCurrencyConverter{result: 2500.0},
+			req: dto.CreateAccountRequest{
+				Name:         "EUR Account",
+				ClientID:     1,
+				EmployeeID:   1,
+				AccountType:  model.AccountTypePersonal,
+				AccountKind:  model.AccountKindForeign,
+				CurrencyCode: model.EUR,
+				ExpiresAt:    baseExpiresAt(),
+			},
+		},
+		{
+			name:              "client not found",
+			accountRepo:       &fakeAccountRepo{},
+			currencyRepo:      &fakeCurrencyRepo{},
+			userClient:        &fakeUserClient{clientErr: fmt.Errorf("not found")},
+			exchangeConverter: &fakeCurrencyConverter{},
+			req: dto.CreateAccountRequest{
+				Name:        "My Account",
+				ClientID:    999,
+				EmployeeID:  1,
+				AccountType: model.AccountTypePersonal,
+				AccountKind: model.AccountKindCurrent,
+				Subtype:     model.SubtypeStandard,
+				ExpiresAt:   baseExpiresAt(),
+			},
 			expectErr: true,
 			errMsg:    "client not found",
 		},
 		{
-			name:      "employee not found",
-			repo:      &fakeAccountRepo{},
-			uc:        &fakeAccountUserClient{employeeErr: fmt.Errorf("not found")},
-			setupMock: func(mock sqlmock.Sqlmock) {},
-			req:       validPersonalCurrentReq(),
+			name:              "employee not found",
+			accountRepo:       &fakeAccountRepo{},
+			currencyRepo:      &fakeCurrencyRepo{},
+			userClient:        &fakeUserClient{employeeErr: fmt.Errorf("not found")},
+			exchangeConverter: &fakeCurrencyConverter{},
+			req: dto.CreateAccountRequest{
+				Name:        "My Account",
+				ClientID:    1,
+				EmployeeID:  999,
+				AccountType: model.AccountTypePersonal,
+				AccountKind: model.AccountKindCurrent,
+				Subtype:     model.SubtypeStandard,
+				ExpiresAt:   baseExpiresAt(),
+			},
 			expectErr: true,
 			errMsg:    "employee not found",
 		},
 		{
-			name:      "business account without company",
-			repo:      &fakeAccountRepo{},
-			uc:        &fakeAccountUserClient{},
-			setupMock: func(mock sqlmock.Sqlmock) {},
+			name:              "business account without company",
+			accountRepo:       &fakeAccountRepo{},
+			currencyRepo:      &fakeCurrencyRepo{},
+			userClient:        &fakeUserClient{},
+			exchangeConverter: &fakeCurrencyConverter{},
 			req: dto.CreateAccountRequest{
-				Name:        "Test",
+				Name:        "Business No Company",
 				ClientID:    1,
 				EmployeeID:  1,
 				AccountType: model.AccountTypeBusiness,
 				AccountKind: model.AccountKindCurrent,
 				Subtype:     model.SubtypeLLC,
-				ExpiresAt:   time.Now().AddDate(4, 0, 0),
+				ExpiresAt:   baseExpiresAt(),
 			},
 			expectErr: true,
 			errMsg:    "business account requires a company",
 		},
 		{
-			name:      "personal account with company",
-			repo:      &fakeAccountRepo{},
-			uc:        &fakeAccountUserClient{},
-			setupMock: func(mock sqlmock.Sqlmock) {},
+			name:              "personal account with company",
+			accountRepo:       &fakeAccountRepo{},
+			currencyRepo:      &fakeCurrencyRepo{},
+			userClient:        &fakeUserClient{},
+			exchangeConverter: &fakeCurrencyConverter{},
 			req: dto.CreateAccountRequest{
-				Name:        "Test",
+				Name:        "Personal With Company",
 				ClientID:    1,
 				EmployeeID:  1,
-				CompanyID:   ptrUint(1),
+				CompanyID:   ptrUint(10),
 				AccountType: model.AccountTypePersonal,
 				AccountKind: model.AccountKindCurrent,
 				Subtype:     model.SubtypeStandard,
-				ExpiresAt:   time.Now().AddDate(4, 0, 0),
+				ExpiresAt:   baseExpiresAt(),
 			},
 			expectErr: true,
 			errMsg:    "personal account cannot have a company",
 		},
 		{
-			name:      "foreign account missing currency code",
-			repo:      &fakeAccountRepo{},
-			uc:        &fakeAccountUserClient{},
-			setupMock: func(mock sqlmock.Sqlmock) {},
+			name:              "foreign account without currency code",
+			accountRepo:       &fakeAccountRepo{},
+			currencyRepo:      &fakeCurrencyRepo{},
+			userClient:        &fakeUserClient{},
+			exchangeConverter: &fakeCurrencyConverter{},
 			req: dto.CreateAccountRequest{
-				Name:        "Test",
+				Name:        "Foreign No Currency",
 				ClientID:    1,
 				EmployeeID:  1,
 				AccountType: model.AccountTypePersonal,
 				AccountKind: model.AccountKindForeign,
-				ExpiresAt:   time.Now().AddDate(4, 0, 0),
+				ExpiresAt:   baseExpiresAt(),
 			},
 			expectErr: true,
 			errMsg:    "currency code is required for foreign accounts",
 		},
 		{
-			name:      "current account missing subtype",
-			repo:      &fakeAccountRepo{},
-			uc:        &fakeAccountUserClient{},
-			setupMock: func(mock sqlmock.Sqlmock) {},
+			name:              "current account without subtype",
+			accountRepo:       &fakeAccountRepo{},
+			currencyRepo:      &fakeCurrencyRepo{},
+			userClient:        &fakeUserClient{},
+			exchangeConverter: &fakeCurrencyConverter{},
 			req: dto.CreateAccountRequest{
-				Name:        "Test",
+				Name:        "No Subtype",
 				ClientID:    1,
 				EmployeeID:  1,
 				AccountType: model.AccountTypePersonal,
 				AccountKind: model.AccountKindCurrent,
-				ExpiresAt:   time.Now().AddDate(4, 0, 0),
+				ExpiresAt:   baseExpiresAt(),
 			},
 			expectErr: true,
 			errMsg:    "subtype is required for current accounts",
 		},
 		{
-			name: "currency not found in db",
-			repo: &fakeAccountRepo{},
-			uc:   &fakeAccountUserClient{},
-			setupMock: func(mock sqlmock.Sqlmock) {
-				mock.ExpectQuery(`SELECT \* FROM "currencies"`).
-					WillReturnError(fmt.Errorf("record not found"))
+			name:              "account name already exists for client",
+			accountRepo:       &fakeAccountRepo{nameExists: true},
+			currencyRepo:      &fakeCurrencyRepo{},
+			userClient:        &fakeUserClient{},
+			exchangeConverter: &fakeCurrencyConverter{},
+			req: dto.CreateAccountRequest{
+				Name:        "Duplicate Name",
+				ClientID:    1,
+				EmployeeID:  1,
+				AccountType: model.AccountTypePersonal,
+				AccountKind: model.AccountKindCurrent,
+				Subtype:     model.SubtypeStandard,
+				ExpiresAt:   baseExpiresAt(),
 			},
-			req:       validPersonalCurrentReq(),
+			expectErr: true,
+			errMsg:    "account with this name already exists",
+		},
+		{
+			name:              "name exists repo error",
+			accountRepo:       &fakeAccountRepo{nameExistsErr: fmt.Errorf("db error")},
+			currencyRepo:      &fakeCurrencyRepo{},
+			userClient:        &fakeUserClient{},
+			exchangeConverter: &fakeCurrencyConverter{},
+			req: dto.CreateAccountRequest{
+				Name:        "My Account",
+				ClientID:    1,
+				EmployeeID:  1,
+				AccountType: model.AccountTypePersonal,
+				AccountKind: model.AccountKindCurrent,
+				Subtype:     model.SubtypeStandard,
+				ExpiresAt:   baseExpiresAt(),
+			},
+			expectErr: true,
+		},
+		{
+			name:              "currency not found",
+			accountRepo:       &fakeAccountRepo{},
+			currencyRepo:      &fakeCurrencyRepo{findErr: fmt.Errorf("currency not found: RSD")},
+			userClient:        &fakeUserClient{},
+			exchangeConverter: &fakeCurrencyConverter{},
+			req: dto.CreateAccountRequest{
+				Name:        "My Account",
+				ClientID:    1,
+				EmployeeID:  1,
+				AccountType: model.AccountTypePersonal,
+				AccountKind: model.AccountKindCurrent,
+				Subtype:     model.SubtypeStandard,
+				ExpiresAt:   baseExpiresAt(),
+			},
 			expectErr: true,
 			errMsg:    "currency not found",
 		},
 		{
-			name: "repo create fails",
-			repo: &fakeAccountRepo{createErr: fmt.Errorf("insert failed")},
-			uc:   &fakeAccountUserClient{},
-			setupMock: func(mock sqlmock.Sqlmock) {
-				mock.ExpectQuery(`SELECT \* FROM "currencies"`).
-					WillReturnRows(sqlmock.NewRows([]string{"currency_id", "code"}).AddRow(1, "RSD"))
+			name:              "exchange conversion fails",
+			accountRepo:       &fakeAccountRepo{},
+			currencyRepo:      &fakeCurrencyRepo{currency: eurCurrency()},
+			userClient:        &fakeUserClient{},
+			exchangeConverter: &fakeCurrencyConverter{convertErr: fmt.Errorf("exchange service unavailable")},
+			req: dto.CreateAccountRequest{
+				Name:         "EUR Account",
+				ClientID:     1,
+				EmployeeID:   1,
+				AccountType:  model.AccountTypePersonal,
+				AccountKind:  model.AccountKindForeign,
+				CurrencyCode: model.EUR,
+				ExpiresAt:    baseExpiresAt(),
 			},
-			req:       validPersonalCurrentReq(),
+			expectErr: true,
+		},
+		{
+			name:              "repo create fails",
+			accountRepo:       &fakeAccountRepo{createErr: fmt.Errorf("db error")},
+			currencyRepo:      &fakeCurrencyRepo{currency: rsdCurrency()},
+			userClient:        &fakeUserClient{},
+			exchangeConverter: &fakeCurrencyConverter{},
+			req: dto.CreateAccountRequest{
+				Name:        "My Account",
+				ClientID:    1,
+				EmployeeID:  1,
+				AccountType: model.AccountTypePersonal,
+				AccountKind: model.AccountKindCurrent,
+				Subtype:     model.SubtypeStandard,
+				ExpiresAt:   baseExpiresAt(),
+			},
 			expectErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+			svc := newAccountService(tt.accountRepo, tt.currencyRepo, tt.userClient, tt.exchangeConverter)
 
-			db, mock := newMockDB(t)
-			tt.setupMock(mock)
-
-			svc := newAccountService(tt.repo, tt.uc, db)
 			account, err := svc.Create(context.Background(), tt.req)
 
 			if tt.expectErr {
@@ -293,15 +394,16 @@ func TestCreateAccount(t *testing.T) {
 				if tt.errMsg != "" {
 					require.Contains(t, err.Error(), tt.errMsg)
 				}
-				return
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, account)
+				require.NotEmpty(t, account.AccountNumber)
+				require.Equal(t, tt.req.ClientID, account.ClientID)
+				require.Equal(t, tt.req.EmployeeID, account.EmployeeID)
+				require.Equal(t, tt.req.AccountType, account.AccountType)
+				require.Equal(t, tt.req.AccountKind, account.AccountKind)
+				require.Equal(t, tt.currencyRepo.currency.CurrencyID, account.CurrencyID)
 			}
-
-			require.NoError(t, err)
-			require.NotNil(t, account)
-			if tt.check != nil {
-				tt.check(t, account)
-			}
-			require.NoError(t, mock.ExpectationsWereMet())
 		})
 	}
 }

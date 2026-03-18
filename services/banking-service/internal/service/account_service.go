@@ -9,25 +9,29 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-
-	"gorm.io/gorm"
 )
 
 type AccountService struct {
-	repo       repository.AccountRepository
-	userClient client.UserClient
-	db         *gorm.DB
+	repo            repository.AccountRepository
+	currencyRepo    repository.CurrencyRepository
+	userClient      client.UserClient
+	cardService     *CardService
+	exchangeService CurrencyConverter
 }
 
 func NewAccountService(
 	repo repository.AccountRepository,
+	currencyRepo repository.CurrencyRepository,
 	userClient client.UserClient,
-	db *gorm.DB,
+	cardService *CardService,
+	exchangeService CurrencyConverter,
 ) *AccountService {
 	return &AccountService{
-		repo:       repo,
-		userClient: userClient,
-		db:         db,
+		repo:            repo,
+		currencyRepo:    currencyRepo,
+		userClient:      userClient,
+		cardService:     cardService,
+		exchangeService: exchangeService,
 	}
 }
 
@@ -37,13 +41,11 @@ func (s *AccountService) generateAccountNumber(typeCode string) string {
 }
 
 func (s *AccountService) isValidAccountNumber(ctx context.Context, number string) bool {
-	var exists, _ = s.repo.AccountNumberExists(ctx, number)
-
+	exists, _ := s.repo.AccountNumberExists(ctx, number)
 	if exists {
 		return false
 	}
 
-	// TODO Actually implement checksum
 	sum := 0
 	for _, ch := range number {
 		sum += int(ch - '0')
@@ -59,15 +61,6 @@ func (s *AccountService) generateValidAccountNumber(ctx context.Context, account
 			return number
 		}
 	}
-}
-
-func (s *AccountService) findCurrencyByCode(ctx context.Context, code model.CurrencyCode) (*model.Currency, error) {
-	var currency model.Currency
-	result := s.db.WithContext(ctx).Where("code = ?", code).First(&currency)
-	if result.Error != nil {
-		return nil, errors.NotFoundErr("currency not found: " + string(code))
-	}
-	return &currency, nil
 }
 
 func (s *AccountService) Create(ctx context.Context, req dto.CreateAccountRequest) (*model.Account, error) {
@@ -87,7 +80,7 @@ func (s *AccountService) Create(ctx context.Context, req dto.CreateAccountReques
 		return nil, errors.BadRequestErr("personal account cannot have a company")
 	}
 
-	currencyCode := model.CurrencyCode("RSD")
+	currencyCode := model.RSD
 	if req.AccountKind == model.AccountKindForeign {
 		if req.CurrencyCode == "" {
 			return nil, errors.BadRequestErr("currency code is required for foreign accounts")
@@ -99,7 +92,15 @@ func (s *AccountService) Create(ctx context.Context, req dto.CreateAccountReques
 		return nil, errors.BadRequestErr("subtype is required for current accounts")
 	}
 
-	currency, err := s.findCurrencyByCode(ctx, currencyCode)
+	exists, err := s.repo.NameExistsForClient(ctx, req.ClientID, req.Name, "")
+	if err != nil {
+		return nil, errors.InternalErr(err)
+	}
+	if exists {
+		return nil, errors.ConflictErr("account with this name already exists")
+	}
+
+	currency, err := s.currencyRepo.FindByCode(ctx, currencyCode)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +108,16 @@ func (s *AccountService) Create(ctx context.Context, req dto.CreateAccountReques
 	dailyLimit := model.DefaultDailyLimitRSD
 	monthlyLimit := model.DefaultMonthlyLimitRSD
 	if req.AccountKind == model.AccountKindForeign {
-		// TODO Use Exchange Office to change limits.
+		convertedDaily, err := s.exchangeService.Convert(ctx, model.DefaultDailyLimitRSD, model.RSD, currencyCode)
+		if err != nil {
+			return nil, err
+		}
+		convertedMonthly, err := s.exchangeService.Convert(ctx, model.DefaultMonthlyLimitRSD, model.RSD, currencyCode)
+		if err != nil {
+			return nil, err
+		}
+		dailyLimit = convertedDaily
+		monthlyLimit = convertedMonthly
 	}
 
 	account := &model.Account{
@@ -129,6 +139,12 @@ func (s *AccountService) Create(ctx context.Context, req dto.CreateAccountReques
 
 	if err := s.repo.Create(ctx, account); err != nil {
 		return nil, errors.InternalErr(err)
+	}
+
+	if req.GenerateCard {
+		if _, err := s.cardService.createCard(ctx, account, nil); err != nil {
+			return nil, err
+		}
 	}
 
 	return account, nil

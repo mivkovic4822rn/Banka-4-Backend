@@ -49,12 +49,21 @@ func (r *accountRepository) FindByAccountNumber(ctx context.Context, accountNumb
 }
 
 func (r *accountRepository) UpdateBalance(ctx context.Context, account *model.Account) error {
-  db := db.DBFromContext(ctx, r.db)
-  
+	db := db.DBFromContext(ctx, r.db)
+
 	return db.WithContext(ctx).Model(account).Updates(map[string]interface{}{
 		"balance":           account.Balance,
 		"available_balance": account.AvailableBalance,
 		"daily_spending":    account.DailySpending,
 		"monthly_spending":  account.MonthlySpending,
 	}).Error
+}
+
+func (r *accountRepository) NameExistsForClient(ctx context.Context, clientID uint, name string, excludeNumber string) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).
+		Model(&model.Account{}).
+		Where("client_id = ? AND name = ? AND account_number != ?", clientID, name, excludeNumber).
+		Count(&count).Error
+	return count > 0, err
 }

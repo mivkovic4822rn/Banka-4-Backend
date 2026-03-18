@@ -41,12 +41,12 @@ func (f *fakePaymentRepo) Update(ctx context.Context, p *model.Payment) error {
 }
 
 type fakeTransactionRepo struct {
-	createErr       error
-	getErr          error
-	updateErr       error
-	transaction     *model.Transaction
-	returnedTx      *model.Transaction
-	returnedTxErr   error
+	createErr     error
+	getErr        error
+	updateErr     error
+	transaction   *model.Transaction
+	returnedTx    *model.Transaction
+	returnedTxErr error
 }
 
 func (f *fakeTransactionRepo) Create(_ context.Context, t *model.Transaction) error {
@@ -106,6 +106,10 @@ func (f *fakePaymentAccountRepo) FindByAccountNumber(ctx context.Context, accoun
 func (f *fakePaymentAccountRepo) UpdateBalance(ctx context.Context, account *model.Account) error {
 	f.accounts[account.AccountNumber] = account
 	return nil
+}
+
+func (f *fakePaymentAccountRepo) NameExistsForClient(_ context.Context, _ uint, _ string, _ string) (bool, error) {
+	return false, nil
 }
 
 // ── Fake Exchange Service ──────────────────────────────────────────

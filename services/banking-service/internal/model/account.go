@@ -75,39 +75,39 @@ var ValidBusinessSubtypes = map[Subtype]bool{
 }
 
 type Account struct {
-	AccountNumber    string      `gorm:"primaryKey;size:18"`
-	Name             string
-	ClientID         uint        `gorm:"not null;index"`
+	AccountNumber string `gorm:"primaryKey;size:18"`
+	Name          string `gorm:"uniqueIndex"`
+	ClientID      uint   `gorm:"not null;index"`
 
-	CompanyID        *uint       `gorm:"index"`
-	Company          *Company
+	CompanyID *uint `gorm:"index"`
+	Company   *Company
 
-	EmployeeID       uint        `gorm:"not null"`
+	EmployeeID uint `gorm:"not null"`
 
-	CurrencyID       uint        `gorm:"index;not null"`
-	Currency         Currency
+	CurrencyID uint `gorm:"index;not null"`
+	Currency   Currency
 
-	Balance          float64     `gorm:"not null;default:0"`
-	AvailableBalance float64     `gorm:"not null;default:0"`
+	Balance          float64 `gorm:"not null;default:0"`
+	AvailableBalance float64 `gorm:"not null;default:0"`
 
-	CreatedAt        time.Time   `gorm:"autoCreateTime"`
-	ExpiresAt        time.Time   `gorm:"not null"`
+	CreatedAt time.Time `gorm:"autoCreateTime"`
+	ExpiresAt time.Time `gorm:"not null"`
 
-	Status           string      `gorm:"not null;default:Active"`
+	Status string `gorm:"not null;default:Active"`
 
-	AccountType      AccountType `gorm:"not null;size:20"`
-	AccountKind      AccountKind `gorm:"not null;size:20"`
-	Subtype          Subtype     `gorm:"size:20"`
+	AccountType AccountType `gorm:"not null;size:20"`
+	AccountKind AccountKind `gorm:"not null;size:20"`
+	Subtype     Subtype     `gorm:"size:20"`
 
-	MaintenanceFee   float64     `gorm:"not null;default:0"`
-	DailyLimit       float64     `gorm:"not null;default:0"`
-	MonthlyLimit     float64     `gorm:"not null;default:0"`
-	DailySpending    float64     `gorm:"not null;default:0"`
-	MonthlySpending  float64     `gorm:"not null;default:0"`
+	MaintenanceFee  float64 `gorm:"not null;default:0"`
+	DailyLimit      float64 `gorm:"not null;default:0"`
+	MonthlyLimit    float64 `gorm:"not null;default:0"`
+	DailySpending   float64 `gorm:"not null;default:0"`
+	MonthlySpending float64 `gorm:"not null;default:0"`
 }
 
 func GetTypeCode(accountKind AccountKind, accountType AccountType, subtype Subtype) string {
-	return AccountKindCodes[accountKind] + SubtypeTypeCodes[subtype];
+	return AccountKindCodes[accountKind] + SubtypeTypeCodes[subtype]
 }
 
 func UpdateBalances(account *Account, amount float64) {

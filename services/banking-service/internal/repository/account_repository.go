@@ -10,4 +10,5 @@ type AccountRepository interface {
 	AccountNumberExists(ctx context.Context, accountNumber string) (bool, error)
 	FindByAccountNumber(ctx context.Context, accountNumber string) (*model.Account, error)
 	UpdateBalance(ctx context.Context, account *model.Account) error
+	NameExistsForClient(ctx context.Context, clientID uint, name string, excludeNumber string) (bool, error)
 }
