@@ -104,12 +104,24 @@ func (s *PaymentService) CreatePayment(ctx context.Context, req dto.CreatePaymen
 		return nil, errors.InternalErr(err)
 	}
 
+	payment.Transaction = *transaction
 	return payment, nil
+}
+
+func (s *PaymentService) GetAccountPayments(ctx context.Context, accountNumber string, filters *dto.PaymentFilters) ([]model.Payment, int64, error) {
+	payments, total, err := s.paymentRepo.FindByAccount(ctx, accountNumber, filters)
+	if err != nil {
+		return nil, 0, errors.InternalErr(err)
+	}
+	return payments, total, nil
 }
 
 func (s *PaymentService) VerifyPayment(ctx context.Context, id uint, code string) (*model.Payment, error) {
 	payment, err := s.paymentRepo.GetByID(ctx, id)
 	if err != nil {
+		return nil, errors.NotFoundErr("payment not found")
+	}
+	if payment == nil {
 		return nil, errors.NotFoundErr("payment not found")
 	}
 

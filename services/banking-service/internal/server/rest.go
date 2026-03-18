@@ -88,7 +88,19 @@ func SetupRoutes(
 		accounts.Use(auth.Middleware(verifier, permissions))
 		{
 			accounts.POST("", accountHandler.Create)
-			accounts.GET("/:accountId/cards", auth.RequireIdentityType(auth.IdentityClient, auth.IdentityEmployee), cardHandler.ListCardsByAccount)
+      accounts.GET("/:accountId/cards", auth.RequireIdentityType(auth.IdentityClient, auth.IdentityEmployee), cardHandler.ListCardsByAccount)
+			//TODO employee list all accounts here?
+		}
+
+		clientAccounts := api.Group("/clients/:id/accounts")
+		clientAccounts.Use(auth.Middleware(verifier, permissions))
+		{
+			clientAccounts.GET("", accountHandler.GetClientAccounts)
+			clientAccounts.GET("/:accountNumber", accountHandler.GetAccountDetails)
+			clientAccounts.GET("/:accountNumber/payments", paymentHandler.GetAccountPayments)
+			clientAccounts.PUT("/:accountNumber/name", accountHandler.UpdateAccountName)
+			clientAccounts.POST("/:accountNumber/limits/request", accountHandler.RequestLimitsChange)
+			clientAccounts.PUT("/:accountNumber/limits", accountHandler.ConfirmLimitsChange)
 		}
 
 		companies := api.Group("/companies")
@@ -111,8 +123,8 @@ func SetupRoutes(
 		{
 			exchange.GET("/rates", exchangeHandler.GetRates)
 			exchange.GET("/calculate", exchangeHandler.Calculate)
-    }
-    
+		}
+
 		payments := api.Group("/payments")
 		payments.Use(auth.Middleware(verifier, permissions))
 		{

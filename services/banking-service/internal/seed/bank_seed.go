@@ -129,7 +129,7 @@ var accounts = []struct {
 	{
 		AccountNumber: "444000112345678911",
 		Name:          "Standard Personal Account",
-		ClientID:      1,
+		ClientID:      7,
 		EmployeeID:    1,
 		Balance:       50000.00,
 		ExpiresAt:     time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC),
@@ -287,6 +287,132 @@ var accounts = []struct {
 	},
 }
 
+var seedTransactions = []struct {
+	Transaction model.Transaction
+	Payment     model.Payment
+}{
+	{
+		Transaction: model.Transaction{
+			PayerAccountNumber:     "444000112345678911",
+			RecipientAccountNumber: "444000112345678913",
+			StartAmount:            5000.00,
+			StartCurrencyCode:      "RSD",
+			EndAmount:              5000.00,
+			EndCurrencyCode:        "RSD",
+			Status:                 model.TransactionCompleted,
+			CreatedAt:              time.Now().AddDate(0, 0, -10),
+		},
+		Payment: model.Payment{
+			RecipientName:   "Petar Petrovic",
+			ReferenceNumber: "97-1234567890",
+			PaymentCode:     "289",
+			Purpose:         "Prenos na stedni racun",
+		},
+	},
+	{
+		Transaction: model.Transaction{
+			PayerAccountNumber:     "444000112345678911",
+			RecipientAccountNumber: "444000223456789011",
+			StartAmount:            12000.00,
+			StartCurrencyCode:      "RSD",
+			EndAmount:              12000.00,
+			EndCurrencyCode:        "RSD",
+			Status:                 model.TransactionCompleted,
+			CreatedAt:              time.Now().AddDate(0, 0, -7),
+		},
+		Payment: model.Payment{
+			RecipientName:   "Marko Markovic",
+			ReferenceNumber: "97-9876543210",
+			PaymentCode:     "289",
+			Purpose:         "Uplata za kiriju",
+		},
+	},
+	{
+		Transaction: model.Transaction{
+			PayerAccountNumber:     "444000112345678913",
+			RecipientAccountNumber: "444000112345678911",
+			StartAmount:            3000.00,
+			StartCurrencyCode:      "RSD",
+			EndAmount:              3000.00,
+			EndCurrencyCode:        "RSD",
+			Status:                 model.TransactionCompleted,
+			CreatedAt:              time.Now().AddDate(0, 0, -3),
+		},
+		Payment: model.Payment{
+			RecipientName:   "Petar Petrovic",
+			ReferenceNumber: "",
+			PaymentCode:     "289",
+			Purpose:         "Povracaj novca",
+		},
+	},
+	{
+		Transaction: model.Transaction{
+			PayerAccountNumber:     "444000112345678911",
+			RecipientAccountNumber: "444000334567890111",
+			StartAmount:            8500.00,
+			StartCurrencyCode:      "RSD",
+			EndAmount:              8500.00,
+			EndCurrencyCode:        "RSD",
+			Status:                 model.TransactionProcessing,
+			CreatedAt:              time.Now().AddDate(0, 0, -1),
+		},
+		Payment: model.Payment{
+			RecipientName:   "Ana Jovanovic",
+			ReferenceNumber: "97-1111111111",
+			PaymentCode:     "221",
+			Purpose:         "Uplata za casove",
+		},
+	},
+	{
+		Transaction: model.Transaction{
+			PayerAccountNumber:     "444000112345678911",
+			RecipientAccountNumber: "444000445678901211",
+			StartAmount:            50000.00,
+			StartCurrencyCode:      "RSD",
+			EndAmount:              50000.00,
+			EndCurrencyCode:        "RSD",
+			Status:                 model.TransactionRejected,
+			CreatedAt:              time.Now().AddDate(0, 0, -5),
+		},
+		Payment: model.Payment{
+			RecipientName:   "Nepoznat Primalac",
+			ReferenceNumber: "",
+			PaymentCode:     "289",
+			Purpose:         "Sumnjiva transakcija",
+		},
+	},
+}
+
+var seedVerificationTokens = []model.VerificationToken{
+	{
+		ClientID:        7,
+		AccountNumber:   "444000112345678911",
+		Code:            "1234",
+		NewDailyLimit:   500000.00,
+		NewMonthlyLimit: 2000000.00,
+		ExpiresAt:       time.Now().AddDate(1, 0, 0),
+		Used:            false,
+	},
+	{
+		ClientID:        1,
+		AccountNumber:   "444000112345678913",
+		Code:            "5678",
+		NewDailyLimit:   300000.00,
+		NewMonthlyLimit: 1500000.00,
+		ExpiresAt:       time.Now().AddDate(0, 0, -1),
+		Used:            false,
+	},
+	{
+		ClientID:        1,
+		AccountNumber:   "444000112345678911",
+		Code:            "9999",
+		NewDailyLimit:   100000.00,
+		NewMonthlyLimit: 500000.00,
+		ExpiresAt:       time.Now().AddDate(1, 0, 0),
+		Used:            true,
+	},
+}
+
 func uintPtr(v uint) *uint {
 	return &v
 }
@@ -419,6 +545,44 @@ func Run(db *gorm.DB) error {
 			return err
 		} else {
 			log.Printf("account already exists: %s", a.AccountNumber)
+		}
+	}
+
+	// seed transactions and payments
+	var txCount int64
+	if err := db.Model(&model.Transaction{}).Count(&txCount).Error; err != nil {
+		return err
+	}
+	if txCount == 0 {
+		for _, s := range seedTransactions {
+			tx := s.Transaction
+			if err := db.Create(&tx).Error; err != nil {
+				log.Printf("failed to create transaction: %v", err)
+				return err
+			}
+			payment := s.Payment
+			payment.TransactionID = tx.TransactionID
+			if err := db.Create(&payment).Error; err != nil {
+				log.Printf("failed to create payment: %v", err)
+				return err
+			}
+			log.Printf("created payment %d linked to transaction %d", payment.PaymentID, tx.TransactionID)
+		}
+	}
+
+	// seed limit verification tokens
+	var tokenCount int64
+	if err := db.Model(&model.VerificationToken{}).Count(&tokenCount).Error; err != nil {
+		return err
+	}
+	if tokenCount == 0 {
+		for _, t := range seedVerificationTokens {
+			token := t
+			if err := db.Create(&token).Error; err != nil {
+				log.Printf("failed to create verification token: %v", err)
+				return err
+			}
+			log.Printf("created verification token: code=%s account=%s used=%v", token.Code, token.AccountNumber, token.Used)
 		}
 	}
 

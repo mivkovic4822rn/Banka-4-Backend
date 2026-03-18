@@ -15,6 +15,7 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/api/accounts": {
         "/api/accounts/{accountId}/cards": {
             "get": {
                 "security": [
@@ -22,11 +23,15 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+                "description": "Returns all active accounts belonging to the authenticated client",
                 "description": "Returns cards for the specified account. Clients can access only their own accounts, while employees can access any account.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
+                    "accounts"
+                ],
+                "summary": "List client accounts",
                     "cards"
                 ],
                 "summary": "List cards for an account",
@@ -43,6 +48,16 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/banking-service_internal_dto.AccountSummaryResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
                             "$ref": "#/definitions/dto.AccountCardsResponse"
                         }
                     },
@@ -51,6 +66,46 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/errors.AppError"
                         }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a new bank account for a client. Account kind must be \"Current\" or \"Foreign\". Current accounts require a subtype; foreign accounts require a currency code.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "accounts"
+                ],
+                "summary": "Create a new bank account",
+                "parameters": [
+                    {
+                        "description": "Account creation data",
+                        "name": "account",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/banking-service_internal_dto.CreateAccountRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/banking-service_internal_dto.AccountResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
                     },
                     "403": {
                         "description": "Forbidden",
@@ -63,6 +118,18 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/errors.AppError"
                         }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/accounts/{accountNumber}": {
+            "get": {
                     }
                 }
             }
@@ -74,6 +141,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+                "description": "Returns full details for a specific account owned by the authenticated client",
                 "description": "Client requests a new card for their account. The request is confirmed later using a confirmation code.",
                 "consumes": [
                     "application/json"
@@ -82,6 +150,16 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
+                    "accounts"
+                ],
+                "summary": "Get account details",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Account number",
+                        "name": "accountNumber",
+                        "in": "path",
+                        "required": true
                     "cards"
                 ],
                 "summary": "Request a new card",
@@ -100,6 +178,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
+                            "$ref": "#/definitions/banking-service_internal_dto.AccountResponse"
                             "$ref": "#/definitions/dto.MessageResponse"
                         }
                     },
@@ -126,6 +205,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/errors.AppError"
                         }
+                    }
+                }
+            }
+        },
+        "/api/accounts/{accountNumber}/limits": {
+            "put": {
                     },
                     "409": {
                         "description": "Conflict",
@@ -143,6 +228,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+                "description": "Confirms a pending limit change request using the verification code from the mobile app",
                 "description": "Confirms a pending card request using the confirmation code and creates the card.",
                 "consumes": [
                     "application/json"
@@ -151,6 +237,19 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
+                    "accounts"
+                ],
+                "summary": "Confirm account limit change",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Account number",
+                        "name": "accountNumber",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Verification code, you can use 1234 for testing but still needs request to be made first",
                     "cards"
                 ],
                 "summary": "Confirm a card request",
@@ -161,11 +260,14 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
+                            "$ref": "#/definitions/banking-service_internal_dto.ConfirmLimitsChangeRequest"
                             "$ref": "#/definitions/dto.ConfirmCardRequest"
                         }
                     }
                 ],
                 "responses": {
+                    "200": {
+                        "description": "OK"
                     "201": {
                         "description": "Created",
                         "schema": {
@@ -195,6 +297,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/errors.AppError"
                         }
+                    }
+                }
+            }
+        },
+        "/api/accounts/{accountNumber}/limits/request": {
+            "post": {
                     },
                     "409": {
                         "description": "Conflict",
@@ -212,11 +320,34 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+                "description": "Initiates a limit change request for an account. Sends a verification code for confirmation via mobile app, temporarily returned in body as code.",
+                "consumes": [
+                    "application/json"
+                ],
                 "description": "Blocks a card. Clients can block only their own cards, while employees can block any card.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
+                    "accounts"
+                ],
+                "summary": "Request account limit change",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Account number",
+                        "name": "accountNumber",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "New daily and monthly limits",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/banking-service_internal_dto.RequestLimitsChangeRequest"
+                        }
                     "cards"
                 ],
                 "summary": "Block a card",
@@ -233,6 +364,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
+                            "$ref": "#/definitions/banking-service_internal_dto.RequestLimitsChangeResponse"
                             "$ref": "#/definitions/dto.CardResponse"
                         }
                     },
@@ -263,6 +395,7 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/accounts/{accountNumber}/name": {
         "/api/cards/{cardId}/deactivate": {
             "put": {
                 "security": [
@@ -270,11 +403,34 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+                "description": "Updates the display name of an account owned by the authenticated client",
+                "consumes": [
+                    "application/json"
+                ],
                 "description": "Deactivates a card permanently. Only employees can perform this action.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
+                    "accounts"
+                ],
+                "summary": "Update account name",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Account number",
+                        "name": "accountNumber",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "New account name",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/banking-service_internal_dto.UpdateAccountNameRequest"
+                        }
                     "cards"
                 ],
                 "summary": "Deactivate a card",
@@ -289,6 +445,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
+                        "description": "OK"
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/dto.CardResponse"
@@ -321,6 +478,8 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/accounts/{accountNumber}/payments": {
+            "get": {
         "/api/cards/{cardId}/unblock": {
             "put": {
                 "security": [
@@ -328,11 +487,67 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+                "description": "Returns a paginated list of payments for an account, filterable by status, date range, and amount. Only the account owner can access this.",
                 "description": "Unblocks a blocked card. Only employees can perform this action.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
+                    "payments"
+                ],
+                "summary": "List account payments",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Account number",
+                        "name": "accountNumber",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by status (processing, completed, rejected)",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter from date (YYYY-MM-DD)",
+                        "name": "start_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter to date (YYYY-MM-DD)",
+                        "name": "end_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "number",
+                        "description": "Minimum amount filter",
+                        "name": "min_amount",
+                        "in": "query"
+                    },
+                    {
+                        "type": "number",
+                        "description": "Maximum amount filter",
+                        "name": "max_amount",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Page size",
+                        "name": "page_size",
+                        "in": "query"
                     "cards"
                 ],
                 "summary": "Unblock a card",
@@ -349,6 +564,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
+                            "$ref": "#/definitions/banking-service_internal_dto.ListPaymentsResponse"
                             "$ref": "#/definitions/dto.CardResponse"
                         }
                     },
@@ -404,6 +620,10 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "banking-service_internal_dto.AccountResponse": {
+            "type": "object",
+            "properties": {
+                "account_kind": {
         "dto.AccountCardsResponse": {
             "type": "object",
             "properties": {
@@ -413,6 +633,98 @@ const docTemplate = `{
                 "account_number": {
                     "type": "string"
                 },
+                "account_type": {
+                    "type": "string"
+                },
+                "available_balance": {
+                    "type": "number"
+                },
+                "balance": {
+                    "type": "number"
+                },
+                "client_id": {
+                    "type": "integer"
+                },
+                "company_id": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "currency": {
+                    "$ref": "#/definitions/banking-service_internal_model.CurrencyCode"
+                },
+                "daily_limit": {
+                    "type": "number"
+                },
+                "daily_spending": {
+                    "type": "number"
+                },
+                "employee_id": {
+                    "type": "integer"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "maintenance_fee": {
+                    "type": "number"
+                },
+                "monthly_limit": {
+                    "type": "number"
+                },
+                "monthly_spending": {
+                    "type": "number"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "reserved_funds": {
+                    "type": "number"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "subtype": {
+                    "type": "string"
+                }
+            }
+        },
+        "banking-service_internal_dto.AccountSummaryResponse": {
+            "type": "object",
+            "properties": {
+                "account_kind": {
+                    "type": "string"
+                },
+                "account_number": {
+                    "type": "string"
+                },
+                "account_type": {
+                    "type": "string"
+                },
+                "available_balance": {
+                    "type": "number"
+                },
+                "balance": {
+                    "type": "number"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "reserved_funds": {
+                    "type": "number"
+                }
+            }
+        },
+        "banking-service_internal_dto.ConfirmLimitsChangeRequest": {
+            "type": "object",
+            "required": [
+                "code"
+            ],
+            "properties": {
+                "code": {
                 "cards": {
                     "type": "array",
                     "items": {
@@ -454,6 +766,114 @@ const docTemplate = `{
                 }
             }
         },
+        "banking-service_internal_dto.CreateAccountRequest": {
+            "type": "object",
+            "required": [
+                "account_kind",
+                "account_type",
+                "client_id",
+                "employee_id",
+                "expires_at",
+                "name"
+            ],
+            "properties": {
+                "account_kind": {
+                    "$ref": "#/definitions/banking-service_internal_model.AccountKind"
+                },
+                "account_type": {
+                    "$ref": "#/definitions/banking-service_internal_model.AccountType"
+                },
+                "client_id": {
+                    "type": "integer"
+                },
+                "company_id": {
+                    "type": "integer"
+                },
+                "create_card": {
+                    "type": "boolean"
+                },
+                "currency_code": {
+                    "description": "required if AccountKind=Foreign",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/banking-service_internal_model.CurrencyCode"
+                        }
+                    ]
+                },
+                "employee_id": {
+                    "type": "integer"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "initial_balance": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "name": {
+                    "type": "string"
+                },
+                "subtype": {
+                    "description": "required if AccountKind=Current",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/banking-service_internal_model.Subtype"
+                        }
+                    ]
+                }
+            }
+        },
+        "banking-service_internal_dto.ListPaymentsResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/banking-service_internal_dto.PaymentSummaryResponse"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "total_pages": {
+                    "type": "integer"
+                }
+            }
+        },
+        "banking-service_internal_dto.PaymentSummaryResponse": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "payer_account": {
+                    "type": "string"
+                },
+                "payment_code": {
+                    "type": "string"
+                },
+                "purpose": {
+                    "type": "string"
+                },
+                "recipient_account": {
+                    "type": "string"
+                },
+                "recipient_name": {
         "dto.CardResponse": {
             "type": "object",
             "properties": {
@@ -492,6 +912,25 @@ const docTemplate = `{
                 }
             }
         },
+        "banking-service_internal_dto.RequestLimitsChangeRequest": {
+            "type": "object",
+            "required": [
+                "daily_limit",
+                "monthly_limit"
+            ],
+            "properties": {
+                "daily_limit": {
+                    "type": "number"
+                },
+                "monthly_limit": {
+                    "type": "number"
+                }
+            }
+        },
+        "banking-service_internal_dto.RequestLimitsChangeResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
         "dto.ConfirmCardRequest": {
             "type": "object",
             "required": [
@@ -514,6 +953,87 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        },
+        "banking-service_internal_dto.UpdateAccountNameRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "banking-service_internal_model.AccountKind": {
+            "type": "string",
+            "enum": [
+                "Current",
+                "Foreign"
+            ],
+            "x-enum-varnames": [
+                "AccountKindCurrent",
+                "AccountKindForeign"
+            ]
+        },
+        "banking-service_internal_model.AccountType": {
+            "type": "string",
+            "enum": [
+                "Personal",
+                "Business"
+            ],
+            "x-enum-varnames": [
+                "AccountTypePersonal",
+                "AccountTypeBusiness"
+            ]
+        },
+        "banking-service_internal_model.CurrencyCode": {
+            "type": "string",
+            "enum": [
+                "EUR",
+                "USD",
+                "CHF",
+                "GBP",
+                "JPY",
+                "CAD",
+                "AUD",
+                "RSD"
+            ],
+            "x-enum-varnames": [
+                "EUR",
+                "USD",
+                "CHF",
+                "GBP",
+                "JPY",
+                "CAD",
+                "AUD",
+                "RSD"
+            ]
+        },
+        "banking-service_internal_model.Subtype": {
+            "type": "string",
+            "enum": [
+                "Standard",
+                "Savings",
+                "Pension",
+                "Youth",
+                "Student",
+                "Unemployed",
+                "LLC",
+                "JointStock",
+                "Foundation"
+            ],
+            "x-enum-varnames": [
+                "SubtypeStandard",
+                "SubtypeSavings",
+                "SubtypePension",
+                "SubtypeYouth",
+                "SubtypeStudent",
+                "SubtypeUnemployed",
+                "SubtypeLLC",
+                "SubtypeJointStock",
+                "SubtypeFoundation"
+            ]
         },
         "dto.RequestCardRequest": {
             "type": "object",

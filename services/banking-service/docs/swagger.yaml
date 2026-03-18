@@ -1,4 +1,144 @@
 definitions:
+  banking-service_internal_dto.AccountResponse:
+    properties:
+      account_kind:
+        type: string
+      account_number:
+        type: string
+      account_type:
+        type: string
+      available_balance:
+        type: number
+      balance:
+        type: number
+      client_id:
+        type: integer
+      company_id:
+        type: integer
+      created_at:
+        type: string
+      currency:
+        $ref: '#/definitions/banking-service_internal_model.CurrencyCode'
+      daily_limit:
+        type: number
+      daily_spending:
+        type: number
+      employee_id:
+        type: integer
+      expires_at:
+        type: string
+      maintenance_fee:
+        type: number
+      monthly_limit:
+        type: number
+      monthly_spending:
+        type: number
+      name:
+        type: string
+      reserved_funds:
+        type: number
+      status:
+        type: string
+      subtype:
+        type: string
+    type: object
+  banking-service_internal_dto.AccountSummaryResponse:
+    properties:
+      account_kind:
+        type: string
+      account_number:
+        type: string
+      account_type:
+        type: string
+      available_balance:
+        type: number
+      balance:
+        type: number
+      currency:
+        type: string
+      name:
+        type: string
+      reserved_funds:
+        type: number
+    type: object
+  banking-service_internal_dto.ConfirmLimitsChangeRequest:
+    properties:
+      code:
+        type: string
+    required:
+    - code
+    type: object
+  banking-service_internal_dto.CreateAccountRequest:
+    properties:
+      account_kind:
+        $ref: '#/definitions/banking-service_internal_model.AccountKind'
+      account_type:
+        $ref: '#/definitions/banking-service_internal_model.AccountType'
+      client_id:
+        type: integer
+      company_id:
+        type: integer
+      create_card:
+        type: boolean
+      currency_code:
+        allOf:
+        - $ref: '#/definitions/banking-service_internal_model.CurrencyCode'
+        description: required if AccountKind=Foreign
+      employee_id:
+        type: integer
+      expires_at:
+        type: string
+      initial_balance:
+        minimum: 0
+        type: number
+      name:
+        type: string
+      subtype:
+        allOf:
+        - $ref: '#/definitions/banking-service_internal_model.Subtype'
+        description: required if AccountKind=Current
+    required:
+    - account_kind
+    - account_type
+    - client_id
+    - employee_id
+    - expires_at
+    - name
+    type: object
+  banking-service_internal_dto.ListPaymentsResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/banking-service_internal_dto.PaymentSummaryResponse'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
+  banking-service_internal_dto.PaymentSummaryResponse:
+    properties:
+      amount:
+        type: number
+      created_at:
+        type: string
+      currency:
+        type: string
+      id:
+        type: integer
+      payer_account:
+        type: string
+      payment_code:
+        type: string
+      purpose:
+        type: string
+      recipient_account:
+        type: string
+      recipient_name:
   dto.AccountCardsResponse:
     properties:
       account_name:
@@ -58,6 +198,86 @@ definitions:
       status:
         type: string
     type: object
+  banking-service_internal_dto.RequestLimitsChangeRequest:
+    properties:
+      daily_limit:
+        type: number
+      monthly_limit:
+        type: number
+    required:
+    - daily_limit
+    - monthly_limit
+    type: object
+  banking-service_internal_dto.RequestLimitsChangeResponse:
+    properties:
+      code:
+        type: string
+    type: object
+  banking-service_internal_dto.UpdateAccountNameRequest:
+    properties:
+      name:
+        type: string
+    required:
+    - name
+    type: object
+  banking-service_internal_model.AccountKind:
+    enum:
+    - Current
+    - Foreign
+    type: string
+    x-enum-varnames:
+    - AccountKindCurrent
+    - AccountKindForeign
+  banking-service_internal_model.AccountType:
+    enum:
+    - Personal
+    - Business
+    type: string
+    x-enum-varnames:
+    - AccountTypePersonal
+    - AccountTypeBusiness
+  banking-service_internal_model.CurrencyCode:
+    enum:
+    - EUR
+    - USD
+    - CHF
+    - GBP
+    - JPY
+    - CAD
+    - AUD
+    - RSD
+    type: string
+    x-enum-varnames:
+    - EUR
+    - USD
+    - CHF
+    - GBP
+    - JPY
+    - CAD
+    - AUD
+    - RSD
+  banking-service_internal_model.Subtype:
+    enum:
+    - Standard
+    - Savings
+    - Pension
+    - Youth
+    - Student
+    - Unemployed
+    - LLC
+    - JointStock
+    - Foundation
+    type: string
+    x-enum-varnames:
+    - SubtypeStandard
+    - SubtypeSavings
+    - SubtypePension
+    - SubtypeYouth
+    - SubtypeStudent
+    - SubtypeUnemployed
+    - SubtypeLLC
+    - SubtypeJointStock
+    - SubtypeFoundation
   dto.ConfirmCardRequest:
     properties:
       account_number:
@@ -97,6 +317,9 @@ info:
   title: Banking Service API
   version: "1.0"
 paths:
+  /api/accounts:
+    get:
+      description: Returns all active accounts belonging to the authenticated client
   /api/accounts/{accountId}/cards:
     get:
       description: Returns cards for the specified account. Clients can access only
@@ -113,11 +336,45 @@ paths:
         "200":
           description: OK
           schema:
+            items:
+              $ref: '#/definitions/banking-service_internal_dto.AccountSummaryResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.AppError'
             $ref: '#/definitions/dto.AccountCardsResponse'
         "401":
           description: Unauthorized
           schema:
             $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: List client accounts
+      tags:
+      - accounts
+    post:
+      consumes:
+      - application/json
+      description: Creates a new bank account for a client. Account kind must be "Current"
+        or "Foreign". Current accounts require a subtype; foreign accounts require
+        a currency code.
+      parameters:
+      - description: Account creation data
+        in: body
+        name: account
+        required: true
+        schema:
+          $ref: '#/definitions/banking-service_internal_dto.CreateAccountRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/banking-service_internal_dto.AccountResponse'
+        "400":
+          description: Bad Request
         "403":
           description: Forbidden
           schema:
@@ -126,6 +383,25 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/errors.AppError'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Create a new bank account
+      tags:
+      - accounts
+  /api/accounts/{accountNumber}:
+    get:
+      description: Returns full details for a specific account owned by the authenticated
+        client
+      parameters:
+      - description: Account number
+        in: path
+        name: accountNumber
+        required: true
+        type: string
       security:
       - BearerAuth: []
       summary: List cards for an account
@@ -147,6 +423,7 @@ paths:
         "200":
           description: OK
           schema:
+            $ref: '#/definitions/banking-service_internal_dto.AccountResponse'
             $ref: '#/definitions/dto.CardResponse'
         "400":
           description: Bad Request
@@ -166,6 +443,28 @@ paths:
             $ref: '#/definitions/errors.AppError'
       security:
       - BearerAuth: []
+      summary: Get account details
+      tags:
+      - accounts
+  /api/accounts/{accountNumber}/limits:
+    put:
+      consumes:
+      - application/json
+      description: Confirms a pending limit change request using the verification
+        code from the mobile app
+      parameters:
+      - description: Account number
+        in: path
+        name: accountNumber
+        required: true
+        type: string
+      - description: Verification code, you can use 1234 for testing but still needs
+          request to be made first
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/banking-service_internal_dto.ConfirmLimitsChangeRequest'
       summary: Block a card
       tags:
       - cards
@@ -204,6 +503,27 @@ paths:
             $ref: '#/definitions/errors.AppError'
       security:
       - BearerAuth: []
+      summary: Confirm account limit change
+      tags:
+      - accounts
+  /api/accounts/{accountNumber}/limits/request:
+    post:
+      consumes:
+      - application/json
+      description: Initiates a limit change request for an account. Sends a verification
+        code for confirmation via mobile app, temporarily returned in body as code.
+      parameters:
+      - description: Account number
+        in: path
+        name: accountNumber
+        required: true
+        type: string
+      - description: New daily and monthly limits
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/banking-service_internal_dto.RequestLimitsChangeRequest'
       summary: Deactivate a card
       tags:
       - cards
@@ -222,6 +542,7 @@ paths:
         "200":
           description: OK
           schema:
+            $ref: '#/definitions/banking-service_internal_dto.RequestLimitsChangeResponse'
             $ref: '#/definitions/dto.CardResponse'
         "400":
           description: Bad Request
@@ -241,6 +562,22 @@ paths:
             $ref: '#/definitions/errors.AppError'
       security:
       - BearerAuth: []
+      summary: Request account limit change
+      tags:
+      - accounts
+  /api/accounts/{accountNumber}/name:
+    put:
+      consumes:
+      - application/json
+      description: Updates the display name of an account owned by the authenticated
+        client
+      parameters:
+      - description: Account number
+        in: path
+        name: accountNumber
+        required: true
+        type: string
+      - description: New account name
       summary: Unblock a card
       tags:
       - cards
@@ -256,6 +593,7 @@ paths:
         name: request
         required: true
         schema:
+          $ref: '#/definitions/banking-service_internal_dto.UpdateAccountNameRequest'
           $ref: '#/definitions/dto.RequestCardRequest'
       produces:
       - application/json
@@ -280,6 +618,59 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Update account name
+      tags:
+      - accounts
+  /api/accounts/{accountNumber}/payments:
+    get:
+      description: Returns a paginated list of payments for an account, filterable
+        by status, date range, and amount. Only the account owner can access this.
+      parameters:
+      - description: Account number
+        in: path
+        name: accountNumber
+        required: true
+        type: string
+      - description: Filter by status (processing, completed, rejected)
+        in: query
+        name: status
+        type: string
+      - description: Filter from date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: Filter to date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      - description: Minimum amount filter
+        in: query
+        name: min_amount
+        type: number
+      - description: Maximum amount filter
+        in: query
+        name: max_amount
+        type: number
+      - description: Page number
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - description: Page size
+        in: query
+        maximum: 100
+        minimum: 1
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/banking-service_internal_dto.ListPaymentsResponse'
         "409":
           description: Conflict
           schema:
@@ -321,6 +712,11 @@ paths:
           description: Forbidden
           schema:
             $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: List account payments
+      tags:
+      - payments
         "404":
           description: Not Found
           schema:

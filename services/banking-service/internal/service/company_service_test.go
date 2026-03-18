@@ -115,18 +115,11 @@ func TestCreateCompany(t *testing.T) {
 		errMsg    string
 	}{
 		{
-			name: "success",
-			repo: &fakeCompanyRepo{workCodeExists: true},
-			uc:   &fakeUserClient{},
-			setupMock: func(mock sqlmock.Sqlmock) {
-				mock.ExpectQuery(`SELECT count\(\*\) FROM "work_codes"`).
-					WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
-				mock.ExpectQuery(`SELECT count\(\*\) FROM "companies"`).
-					WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
-				mock.ExpectQuery(`SELECT count\(\*\) FROM "companies"`).
-					WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
-			},
-			req: validCompanyReq(),
+			name:      "success",
+			repo:      &fakeCompanyRepo{workCodeExists: true},
+			uc:        &fakeUserClient{},
+			setupMock: func(mock sqlmock.Sqlmock) {},
+			req:       validCompanyReq(),
 		},
 		{
 			name:      "owner not found",
