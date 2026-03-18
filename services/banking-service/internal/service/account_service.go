@@ -113,7 +113,8 @@ func (s *AccountService) Create(ctx context.Context, req dto.CreateAccountReques
 	dailyLimit := model.DefaultDailyLimitRSD
 	monthlyLimit := model.DefaultMonthlyLimitRSD
 	if req.AccountKind == model.AccountKindForeign {
-		// TODO Use Exchange Office to change limits.
+		dailyLimit = model.DefaultDailyLimitForeign
+		monthlyLimit = model.DefaultMonthlyLimitForeign
 	}
 
 	account := &model.Account{

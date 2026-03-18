@@ -42,6 +42,11 @@ const (
 	DefaultMonthlyLimitRSD = 1000000.0
 )
 
+const (
+	DefaultDailyLimitForeign   = 5000.0
+	DefaultMonthlyLimitForeign = 20000.0
+)
+
 var AccountKindCodes = map[AccountKind]string{
 	AccountKindCurrent: "1",
 	AccountKindForeign: "2",

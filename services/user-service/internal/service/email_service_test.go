@@ -1,11 +1,19 @@
 package service
 
 import (
+	"net"
 	"testing"
+	"time"
 	"user-service/internal/config"
 )
 
 func TestEmailServiceSend(t *testing.T) {
+	conn, err := net.DialTimeout("tcp", "localhost:1025", time.Second)
+	if err != nil {
+		t.Skip("MailDev not available; start Docker to run this test")
+	}
+	conn.Close()
+
 	// Configuration for MailDev (running in docker-compose-dev.yml)
 	cfg := &config.Configuration{
 		SMTP: config.SMTPConfig{
@@ -20,7 +28,7 @@ func TestEmailServiceSend(t *testing.T) {
 	service := NewEmailService(cfg)
 
 	// Test sending an email
-	err := service.Send(
+	err = service.Send(
 		"recipient@example.com",
 		"Test Email Subject",
 		"This is a test email body from the email service.",
@@ -35,6 +43,12 @@ func TestEmailServiceSend(t *testing.T) {
 
 // TestEmailServiceSendWithValidation tests email validation
 func TestEmailServiceSendWithValidation(t *testing.T) {
+	conn, err := net.DialTimeout("tcp", "localhost:1025", time.Second)
+	if err != nil {
+		t.Skip("MailDev not available; start Docker to run this test")
+	}
+	conn.Close()
+
 	cfg := &config.Configuration{
 		SMTP: config.SMTPConfig{
 			Host: "localhost",

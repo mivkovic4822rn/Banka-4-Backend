@@ -86,7 +86,7 @@ var accounts = []struct {
 	{
 		AccountNumber: "444000112345678911",
 		Name:          "Standard Personal Account",
-		ClientID:      1,
+		ClientID:      7,
 		EmployeeID:    1,
 		Balance:       50000.00,
 		ExpiresAt:     time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC),
@@ -100,7 +100,7 @@ var accounts = []struct {
 	{
 		AccountNumber: "444000112345678913",
 		Name:          "Savings Account",
-		ClientID:      1,
+		ClientID:      7,
 		EmployeeID:    1,
 		Balance:       100000.00,
 		ExpiresAt:     time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC),
@@ -342,7 +342,7 @@ var seedTransactions = []struct {
 
 var seedVerificationTokens = []model.VerificationToken{
 	{
-		ClientID:        1,
+		ClientID:        7,
 		AccountNumber:   "444000112345678911",
 		Code:            "1234",
 		NewDailyLimit:   500000.00,
