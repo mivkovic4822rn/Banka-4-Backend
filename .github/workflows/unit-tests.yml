@@ -1,0 +1,47 @@
+name: Banka 4 CI - Unit Tests
+run-name: Unit tests for ${{ github.repository }}
+
+on:
+  workflow_dispatch:
+  push:
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Check out ${{ github.ref }} after a ${{ github.event_name }} event
+      uses: actions/checkout@v6
+
+    - name: Set up Go
+      uses: actions/setup-go@v6
+      with:
+        go-version-file: ./go.work
+    
+    - name: Run unit tests
+      run: |
+        set +e
+        failed=0
+        echo "::group::Running unit tests for ./common/..."
+        go test -v ./common/...
+        if [ $? -ne 0 ]; then
+          echo "::endgroup::"
+          echo "::error::Failed to build $service"
+          failed=1
+        else
+          echo "::endgroup::"
+        fi
+        for service in $(ls -d ./services/*/); do
+          echo "::group::Running unit tests for $service..."
+          go test -v $service...
+          if [ $? -ne 0 ]; then
+            echo "::endgroup::"
+            echo "::error::Failed to build $service"
+            failed=1
+          else
+            echo "::endgroup::"
+          fi
+        done
+        if [ $failed != 0 ]; then
+          exit 1
+        fi

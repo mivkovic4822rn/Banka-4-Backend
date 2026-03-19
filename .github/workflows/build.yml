@@ -1,0 +1,38 @@
+name: Banka 4 CI - Build (w/o Docker)
+run-name: Build for ${{ github.repository }}
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out ${{ github.ref }} after a ${{ github.event_name }} event
+      uses: actions/checkout@v6
+
+    - name: Set up Go
+      uses: actions/setup-go@v6
+      with:
+        go-version-file: ./go.work
+
+    - name: Build the application
+      run: |
+        set +e
+        failed=0
+        for service in $(ls -d ./services/*/); do
+          echo "::group::Building $service..."
+          go build -v $service/cmd/main.go
+          if [ $? -ne 0 ]; then
+            echo "::endgroup::"
+            echo "::error::Failed to build $service"
+            failed=1
+          else
+            echo "::endgroup::"
+          fi
+        done
+        if [ $failed != 0 ]; then
+          exit 1
+        fi

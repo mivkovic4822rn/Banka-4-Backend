@@ -1,0 +1,50 @@
+name: Banka 4 CI - Integration Tests
+run-name: Integration tests for ${{ github.repository }}
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types:
+      - closed
+
+jobs:
+  integration-tests:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out ${{ github.ref }} after a ${{ github.event_name }} event
+      uses: actions/checkout@v6
+
+    - name: Set up Go
+      uses: actions/setup-go@v6
+      with:
+        go-version-file: ./go.work
+    
+    - name: Run integration tests
+      run: |
+        set +e
+        failed=0
+        echo "::group::Running integration tests for ./common/..."
+        go test -tags=integration -v ./common/...
+        if [ $? -ne 0 ]; then
+          echo "::endgroup::"
+          echo "::error::Failed to build $service"
+          failed=1
+        else
+          echo "::endgroup::"
+        fi
+        for service in $(ls -d ./services/*/); do
+          echo "::group::Running integration tests for $service..."
+          go test -tags=integration -v $service...
+          if [ $? -ne 0 ]; then
+            echo "::endgroup::"
+            echo "::error::Failed to build $service"
+            failed=1
+          else
+            echo "::endgroup::"
+          fi
+        done
+        if [ $failed != 0 ]; then
+          exit 1
+        fi
