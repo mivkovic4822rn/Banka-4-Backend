@@ -5,7 +5,6 @@ import (
 	"banking-service/internal/dto"
 	"banking-service/internal/model"
 	"banking-service/internal/repository"
-	"common/pkg/auth"
 	"common/pkg/errors"
 	"context"
 	"time"
@@ -128,19 +127,6 @@ func (s *PaymentService) VerifyPayment(ctx context.Context, id uint, code, autho
 	transaction := &payment.Transaction
 	if transaction.Status != model.TransactionProcessing {
 		return nil, errors.BadRequestErr("payment already processed")
-	}
-
-	authCtx := auth.GetAuthFromContext(ctx)
-	if authCtx == nil || authCtx.ClientID == nil {
-		return nil, errors.ForbiddenErr("client access required")
-	}
-
-	payerAccount, err := s.accountRepo.FindByAccountNumber(ctx, transaction.PayerAccountNumber)
-	if err != nil {
-		return nil, errors.NotFoundErr("payer account not found")
-	}
-	if payerAccount.ClientID != *authCtx.ClientID {
-		return nil, errors.ForbiddenErr("cannot verify payment for another client")
 	}
 
 	secret, err := s.mobileSecretClient.GetMobileSecret(ctx, authorizationHeader)
