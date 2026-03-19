@@ -119,7 +119,6 @@ func GetParamUint(c *gin.Context, key string) (uint, bool) {
 // @Failure 401 {object} errors.AppError
 // @Security BearerAuth
 // @Router /api/clients/{clientId}/accounts [get]
-
 func (h *AccountHandler) GetClientAccounts(c *gin.Context) {
 
 	clientId, ok := GetParamUint(c, "clientId")
@@ -153,7 +152,6 @@ func (h *AccountHandler) GetClientAccounts(c *gin.Context) {
 // @Failure 404 {object} errors.AppError
 // @Security BearerAuth
 // @Router /api/clients/{clientId}/accounts/{accountNumber} [get]
-
 func (h *AccountHandler) GetAccountDetails(c *gin.Context) {
 	clientId, ok := GetParamUint(c, "clientId")
 	if !ok {

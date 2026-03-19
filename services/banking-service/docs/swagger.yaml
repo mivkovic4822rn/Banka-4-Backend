@@ -53,6 +53,25 @@ definitions:
       subtype:
         type: string
     type: object
+  dto.AccountSummaryResponse:
+    properties:
+      account_kind:
+        type: string
+      account_number:
+        type: string
+      account_type:
+        type: string
+      available_balance:
+        type: number
+      balance:
+        type: number
+      currency:
+        type: string
+      name:
+        type: string
+      reserved_funds:
+        type: number
+    type: object
   dto.AuthorizedPersonRequest:
     properties:
       address:
@@ -797,6 +816,76 @@ paths:
       summary: Confirm a card request
       tags:
       - cards
+  /api/clients/{clientId}/accounts:
+    get:
+      description: Returns all active accounts belonging to the authenticated client
+      parameters:
+      - description: Client id
+        in: path
+        name: clientId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.AccountSummaryResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: List client accounts
+      tags:
+      - accounts
+  /api/clients/{clientId}/accounts/{accountNumber}:
+    get:
+      description: Returns full details for a specific account owned by the authenticated
+        client
+      parameters:
+      - description: Account number
+        in: path
+        name: accountNumber
+        required: true
+        type: string
+      - description: Client id
+        in: path
+        name: clientId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.AccountResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Get account details
+      tags:
+      - accounts
   /api/clients/{clientId}/accounts/{accountNumber}/cards:
     get:
       description: Returns cards for the specified account. Clients can access only
