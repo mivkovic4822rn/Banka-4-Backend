@@ -14,12 +14,15 @@ import (
 // ── Fake Payment Repo ──────────────────────────────────────────────
 
 type fakePaymentRepo struct {
-	createErr      error
-	getErr         error
-	findAllErr     error
-	payment        *model.Payment
-	allPayments    []model.Payment
-	capturedFilter repository.PaymentFilter
+	createErr   error
+	getErr      error
+  findAllErr  error
+	payment     *model.Payment
+	payments    []model.Payment
+  allPayments []model.Payment
+	findAccErr  error
+	total       int64
+  capturedFilter repository.PaymentFilter
 }
 
 func (f *fakePaymentRepo) Create(ctx context.Context, p *model.Payment) error {
@@ -49,6 +52,10 @@ func (f *fakePaymentRepo) FindAllByClientID(ctx context.Context, clientID uint, 
 		return nil, f.findAllErr
 	}
 	return f.allPayments, nil
+}
+
+func (f *fakePaymentRepo) FindByAccount(_ context.Context, _ string, _ *dto.PaymentFilters) ([]model.Payment, int64, error) {
+	return f.payments, f.total, f.findAccErr
 }
 
 type fakeTransactionRepo struct {
@@ -83,7 +90,10 @@ func (f *fakeTransactionRepo) GetByID(_ context.Context, _ uint) (*model.Transac
 
 type fakePaymentAccountRepo struct {
 	accounts map[string]*model.Account
+	accountArr []model.Account
+	account    *model.Account
 	findErr  error
+	nameExists bool
 }
 
 func newFakePaymentAccountRepo(accounts ...*model.Account) *fakePaymentAccountRepo {
@@ -113,6 +123,27 @@ func (f *fakePaymentAccountRepo) FindByAccountNumber(ctx context.Context, accoun
 	}
 	return acc, nil
 }
+
+func (f *fakePaymentAccountRepo) FindAllByClientID(_ context.Context, _ uint) ([]model.Account, error) {
+	return f.accountArr, nil
+}
+
+func (f *fakePaymentAccountRepo) FindByAccountNumberAndClientID(_ context.Context, _ string, _ uint) (*model.Account, error) {
+	return f.account, nil
+}
+
+func (f *fakePaymentAccountRepo) NameExistsForClient(_ context.Context, _ uint, _ string, _ string) (bool, error) {
+	return f.nameExists, nil
+}
+
+func (f *fakePaymentAccountRepo) UpdateName(_ context.Context, _ string, _ string) error {
+	return nil
+}
+
+func (f *fakePaymentAccountRepo) UpdateLimits(_ context.Context, _ string, _ float64, _ float64) error {
+	return nil
+}
+
 
 func (f *fakePaymentAccountRepo) UpdateBalance(ctx context.Context, account *model.Account) error {
 	f.accounts[account.AccountNumber] = account
@@ -461,4 +492,62 @@ func TestCreatePayment_TransactionRepoError(t *testing.T) {
 	payment, err := svc.CreatePayment(context.Background(), req)
 	require.Nil(t, payment)
 	require.Error(t, err)
+}
+
+func TestGetAccountPayments(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		repo      *fakePaymentRepo
+		expectErr bool
+		check     func(t *testing.T, payments []model.Payment, total int64)
+	}{
+		{
+			name: "success returns payments",
+			repo: &fakePaymentRepo{
+				payments: []model.Payment{
+					{PaymentID: 1, RecipientName: "Marko Markovic", Transaction: model.Transaction{StartAmount: 5000, StartCurrencyCode: "RSD", Status: model.TransactionCompleted}},
+					{PaymentID: 2, RecipientName: "Ana Jovanovic", Transaction: model.Transaction{StartAmount: 1200, StartCurrencyCode: "RSD", Status: model.TransactionProcessing}},
+				},
+				total: 2,
+			},
+			check: func(t *testing.T, payments []model.Payment, total int64) {
+				require.Len(t, payments, 2)
+				require.Equal(t, int64(2), total)
+				require.Equal(t, "Marko Markovic", payments[0].RecipientName)
+				require.Equal(t, model.TransactionCompleted, payments[0].Transaction.Status)
+				require.Equal(t, model.TransactionProcessing, payments[1].Transaction.Status)
+			},
+		},
+		{
+			name:      "repo error returns internal error",
+			repo:      &fakePaymentRepo{findAccErr: errors.New("db failure")},
+			expectErr: true,
+		},
+		{
+			name: "returns empty list when no payments",
+			repo: &fakePaymentRepo{payments: []model.Payment{}, total: 0},
+			check: func(t *testing.T, payments []model.Payment, total int64) {
+				require.Empty(t, payments)
+				require.Equal(t, int64(0), total)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			svc := NewPaymentService(tt.repo, &fakeTransactionRepo{})
+			payments, total, err := svc.GetAccountPayments(context.Background(), "444000112345678911", &dto.PaymentFilters{Page: 1, PageSize: 10})
+			if tt.expectErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			if tt.check != nil {
+				tt.check(t, payments, total)
+			}
+		})
+	}
 }

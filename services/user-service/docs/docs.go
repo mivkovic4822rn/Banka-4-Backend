@@ -692,7 +692,7 @@ const docTemplate = `{
                 },
                 "first_name": {
                     "type": "string",
-                    "maxLength": 50
+                    "maxLength": 20
                 },
                 "gender": {
                     "type": "string"

@@ -17,9 +17,16 @@ import (
 // ── Fakes ─────────────────────────────────────────────────────────────────────
 
 type fakeAccountRepo struct {
-	accNumExists        bool
-	accNumExistsErr     error
-	createErr           error
+	accNumExists    bool
+	accNumExistsErr error
+	createErr       error
+	accounts        []model.Account
+	account         *model.Account
+	findErr         error
+	nameExists      bool
+	nameExistsErr   error
+	updateNameErr   error
+	updateLimitsErr error
 	getByAccNumber      *model.Account
 	getByAccNumberErr   error
 	updateErr           error
@@ -32,8 +39,52 @@ func (r *fakeAccountRepo) Create(_ context.Context, _ *model.Account) error {
 func (r *fakeAccountRepo) AccountNumberExists(_ context.Context, _ string) (bool, error) {
 	return r.accNumExists, r.accNumExistsErr
 }
+
+func (r *fakeAccountRepo) FindAllByClientID(_ context.Context, _ uint) ([]model.Account, error) {
+	return r.accounts, r.findErr
+}
+
 func (r *fakeAccountRepo) FindByAccountNumber(_ context.Context, _ string) (*model.Account, error) {
-	return nil, nil
+	return r.account, r.findErr
+}
+
+func (r *fakeAccountRepo) FindByAccountNumberAndClientID(_ context.Context, _ string, _ uint) (*model.Account, error) {
+	return r.account, r.findErr
+}
+
+func (r *fakeAccountRepo) UpdateName(_ context.Context, _ string, _ string) error {
+	return r.updateNameErr
+}
+
+func (r *fakeAccountRepo) UpdateLimits(_ context.Context, _ string, _ float64, _ float64) error {
+	return r.updateLimitsErr
+}
+
+func (r *fakeAccountRepo) NameExistsForClient(_ context.Context, _ uint, _ string, _ string) (bool, error) {
+	return r.nameExists, r.nameExistsErr
+}
+
+type fakeVerificationTokenRepo struct {
+	token     *model.VerificationToken
+	findErr   error
+	createErr error
+	deleteErr error
+}
+
+func (r *fakeVerificationTokenRepo) Create(_ context.Context, _ *model.VerificationToken) error {
+	return r.createErr
+}
+
+func (r *fakeVerificationTokenRepo) FindByAccountAndClient(_ context.Context, _ string, _ uint) (*model.VerificationToken, error) {
+	return r.token, r.findErr
+}
+
+func (r *fakeVerificationTokenRepo) DeleteByAccountAndClient(_ context.Context, _ string, _ uint) error {
+	return r.deleteErr
+}
+
+func (r *fakeAccountRepo) GetByAccountNumber(_ context.Context, _ string) (*model.Account, error) {
+	return r.getByAccNumber, r.getByAccNumberErr
 }
 
 func (r *fakeAccountRepo) UpdateBalance(_ context.Context, _ *model.Account) error {
@@ -57,13 +108,15 @@ func (f *fakeAccountUserClient) GetEmployeeByID(_ context.Context, _ uint) (*pb.
 
 func newAccountService(
 	repo *fakeAccountRepo,
+	vr *fakeVerificationTokenRepo,
 	uc *fakeAccountUserClient,
 	db *gorm.DB,
 ) *AccountService {
 	return &AccountService{
-		repo:       repo,
-		userClient: uc,
-		db:         db,
+		repo:             repo,
+		verificationRepo: vr,
+		userClient:       uc,
+		db:               db,
 	}
 }
 
@@ -285,7 +338,7 @@ func TestCreateAccount(t *testing.T) {
 			db, mock := newMockDB(t)
 			tt.setupMock(mock)
 
-			svc := newAccountService(tt.repo, tt.uc, db)
+			svc := newAccountService(tt.repo, &fakeVerificationTokenRepo{}, tt.uc, db)
 			account, err := svc.Create(context.Background(), tt.req)
 
 			if tt.expectErr {
@@ -302,6 +355,321 @@ func TestCreateAccount(t *testing.T) {
 				tt.check(t, account)
 			}
 			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func TestGetClientAccounts(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		repo      *fakeAccountRepo
+		expectErr bool
+		check     func(t *testing.T, accounts []model.Account)
+	}{
+		{
+			name: "success returns accounts",
+			repo: &fakeAccountRepo{
+				accounts: []model.Account{
+					{AccountNumber: "444000112345678911", Name: "Standard Personal Account"},
+					{AccountNumber: "444000112345678921", Name: "Personal EUR Account"},
+				},
+			},
+			check: func(t *testing.T, accounts []model.Account) {
+				require.Len(t, accounts, 2)
+				require.Equal(t, "444000112345678911", accounts[0].AccountNumber)
+				require.Equal(t, "444000112345678921", accounts[1].AccountNumber)
+			},
+		},
+		{
+			name:      "repo error returns internal error",
+			repo:      &fakeAccountRepo{findErr: fmt.Errorf("db failure")},
+			expectErr: true,
+		},
+		{
+			name: "returns empty slice when client has no accounts",
+			repo: &fakeAccountRepo{accounts: []model.Account{}},
+			check: func(t *testing.T, accounts []model.Account) {
+				require.Empty(t, accounts)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			svc := newAccountService(tt.repo, &fakeVerificationTokenRepo{}, &fakeAccountUserClient{}, nil)
+			accounts, err := svc.GetClientAccounts(context.Background(), 1)
+			if tt.expectErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			if tt.check != nil {
+				tt.check(t, accounts)
+			}
+		})
+	}
+}
+
+func TestGetAccountDetails(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		repo      *fakeAccountRepo
+		expectErr bool
+		errMsg    string
+	}{
+		{
+			name: "success",
+			repo: &fakeAccountRepo{
+				account: &model.Account{AccountNumber: "444000112345678911", Name: "My Account"},
+			},
+		},
+		{
+			name:      "account not found",
+			repo:      &fakeAccountRepo{findErr: fmt.Errorf("record not found")},
+			expectErr: true,
+			errMsg:    "account not found",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			svc := newAccountService(tt.repo, &fakeVerificationTokenRepo{}, &fakeAccountUserClient{}, nil)
+			account, err := svc.GetAccountDetails(context.Background(), "444000112345678911", 1)
+			if tt.expectErr {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.errMsg)
+				return
+			}
+			require.NoError(t, err)
+			require.NotNil(t, account)
+			require.Equal(t, "444000112345678911", account.AccountNumber)
+		})
+	}
+}
+
+func TestUpdateAccountName(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		repo      *fakeAccountRepo
+		newName   string
+		expectErr bool
+		errMsg    string
+	}{
+		{
+			name: "success",
+			repo: &fakeAccountRepo{
+				account: &model.Account{AccountNumber: "444000112345678911", Name: "Old Name"},
+			},
+			newName: "New Name",
+		},
+		{
+			name:      "account not found",
+			repo:      &fakeAccountRepo{findErr: fmt.Errorf("record not found")},
+			newName:   "New Name",
+			expectErr: true,
+			errMsg:    "account not found",
+		},
+		{
+			name: "same name as current",
+			repo: &fakeAccountRepo{
+				account: &model.Account{AccountNumber: "444000112345678911", Name: "Same Name"},
+			},
+			newName:   "Same Name",
+			expectErr: true,
+			errMsg:    "same as the current name",
+		},
+		{
+			name: "name already used by another account",
+			repo: &fakeAccountRepo{
+				account:    &model.Account{AccountNumber: "444000112345678911", Name: "Old Name"},
+				nameExists: true,
+			},
+			newName:   "Taken Name",
+			expectErr: true,
+			errMsg:    "already exists",
+		},
+		{
+			name: "update fails",
+			repo: &fakeAccountRepo{
+				account:       &model.Account{AccountNumber: "444000112345678911", Name: "Old Name"},
+				updateNameErr: fmt.Errorf("db failure"),
+			},
+			newName:   "New Name",
+			expectErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			svc := newAccountService(tt.repo, &fakeVerificationTokenRepo{}, &fakeAccountUserClient{}, nil)
+			err := svc.UpdateAccountName(context.Background(), "444000112345678911", 1, tt.newName)
+			if tt.expectErr {
+				require.Error(t, err)
+				if tt.errMsg != "" {
+					require.Contains(t, err.Error(), tt.errMsg)
+				}
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestRequestLimitsChange(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		repo      *fakeAccountRepo
+		vr        *fakeVerificationTokenRepo
+		expectErr bool
+		errMsg    string
+	}{
+		{
+			name: "success",
+			repo: &fakeAccountRepo{account: &model.Account{}},
+			vr:   &fakeVerificationTokenRepo{},
+		},
+		{
+			name:      "account not found",
+			repo:      &fakeAccountRepo{findErr: fmt.Errorf("not found")},
+			vr:        &fakeVerificationTokenRepo{},
+			expectErr: true,
+			errMsg:    "account not found",
+		},
+		{
+			name:      "delete existing token fails",
+			repo:      &fakeAccountRepo{account: &model.Account{}},
+			vr:        &fakeVerificationTokenRepo{deleteErr: fmt.Errorf("db failure")},
+			expectErr: true,
+		},
+		{
+			name:      "create token fails",
+			repo:      &fakeAccountRepo{account: &model.Account{}},
+			vr:        &fakeVerificationTokenRepo{createErr: fmt.Errorf("db failure")},
+			expectErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			svc := newAccountService(tt.repo, tt.vr, &fakeAccountUserClient{}, nil)
+			code, err := svc.RequestLimitsChange(context.Background(), "444000112345678911", 1, 500000, 2000000)
+			if tt.expectErr {
+				require.Error(t, err)
+				if tt.errMsg != "" {
+					require.Contains(t, err.Error(), tt.errMsg)
+				}
+				return
+			}
+			require.NoError(t, err)
+			require.NotEmpty(t, code)
+			require.Len(t, code, 6)
+		})
+	}
+}
+
+func TestConfirmLimitsChange(t *testing.T) {
+	t.Parallel()
+
+	validToken := &model.VerificationToken{
+		ID:              1,
+		ClientID:        1,
+		AccountNumber:   "444000112345678911",
+		Code:            "123456",
+		NewDailyLimit:   500000,
+		NewMonthlyLimit: 2000000,
+		ExpiresAt:       time.Now().Add(5 * time.Minute),
+	}
+
+	tests := []struct {
+		name      string
+		repo      *fakeAccountRepo
+		vr        *fakeVerificationTokenRepo
+		code      string
+		expectErr bool
+		errMsg    string
+	}{
+		{
+			name: "success with correct code",
+			repo: &fakeAccountRepo{},
+			vr:   &fakeVerificationTokenRepo{token: validToken},
+			code: "123456",
+		},
+		{
+			name: "success with cheat code 1234",
+			repo: &fakeAccountRepo{},
+			vr:   &fakeVerificationTokenRepo{token: validToken},
+			code: "1234",
+		},
+		{
+			name:      "token not found",
+			repo:      &fakeAccountRepo{},
+			vr:        &fakeVerificationTokenRepo{findErr: fmt.Errorf("not found")},
+			code:      "123456",
+			expectErr: true,
+			errMsg:    "no pending limits change",
+		},
+		{
+			name: "token already used",
+			repo: &fakeAccountRepo{},
+			vr: &fakeVerificationTokenRepo{token: &model.VerificationToken{
+				Code: "123456", ExpiresAt: time.Now().Add(5 * time.Minute),
+			}},
+			code:      "123456",
+			expectErr: true,
+			errMsg:    "already been used",
+		},
+		{
+			name: "token expired",
+			repo: &fakeAccountRepo{},
+			vr: &fakeVerificationTokenRepo{token: &model.VerificationToken{
+				Code: "123456", ExpiresAt: time.Now().Add(-1 * time.Minute),
+			}},
+			code:      "123456",
+			expectErr: true,
+			errMsg:    "expired",
+		},
+		{
+			name:      "wrong code",
+			repo:      &fakeAccountRepo{},
+			vr:        &fakeVerificationTokenRepo{token: validToken},
+			code:      "000000",
+			expectErr: true,
+			errMsg:    "invalid verification code",
+		},
+		{
+			name:      "update limits fails",
+			repo:      &fakeAccountRepo{updateLimitsErr: fmt.Errorf("db failure")},
+			vr:        &fakeVerificationTokenRepo{token: validToken},
+			code:      "123456",
+			expectErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			svc := newAccountService(tt.repo, tt.vr, &fakeAccountUserClient{}, nil)
+			err := svc.ConfirmLimitsChange(context.Background(), "444000112345678911", 1, tt.code)
+			if tt.expectErr {
+				require.Error(t, err)
+				if tt.errMsg != "" {
+					require.Contains(t, err.Error(), tt.errMsg)
+				}
+				return
+			}
+			require.NoError(t, err)
 		})
 	}
 }

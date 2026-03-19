@@ -6,15 +6,15 @@ import (
 )
 
 type AccountResponse struct {
-	AccountNumber    string            `json:"account_number"`
-	Name             string            `json:"name"`
-	ClientID         uint              `json:"client_id"`
-	CompanyID        *uint             `json:"company_id,omitempty"`
-	EmployeeID       uint              `json:"employee_id"`
-	Balance          float64           `json:"balance"`
-	AvailableBalance float64           `json:"available_balance"`
-	CreatedAt        time.Time         `json:"created_at"`
-	ExpiresAt        time.Time         `json:"expires_at"`
+	AccountNumber    string             `json:"account_number"`
+	Name             string             `json:"name"`
+	ClientID         uint               `json:"client_id"`
+	CompanyID        *uint              `json:"company_id,omitempty"`
+	EmployeeID       uint               `json:"employee_id"`
+	Balance          float64            `json:"balance"`
+	AvailableBalance float64            `json:"available_balance"`
+	CreatedAt        time.Time          `json:"created_at"`
+	ExpiresAt        time.Time          `json:"expires_at"`
 	CurrencyCode     model.CurrencyCode `json:"currency"`
 	Status           string             `json:"status"`
 	AccountType      string             `json:"account_type"`
@@ -25,6 +25,7 @@ type AccountResponse struct {
 	MonthlyLimit     float64            `json:"monthly_limit"`
 	DailySpending    float64            `json:"daily_spending"`
 	MonthlySpending  float64            `json:"monthly_spending"`
+	ReservedFunds    float64            `json:"reserved_funds"`
 }
 
 func ToAccountResponse(a *model.Account) AccountResponse {
@@ -47,5 +48,6 @@ func ToAccountResponse(a *model.Account) AccountResponse {
 		MonthlyLimit:     a.MonthlyLimit,
 		DailySpending:    a.DailySpending,
 		MonthlySpending:  a.MonthlySpending,
+		ReservedFunds:    a.Balance - a.AvailableBalance,
 	}
 }
