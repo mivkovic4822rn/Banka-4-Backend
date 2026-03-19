@@ -46,14 +46,6 @@ func (f *fakePaymentRepo) Update(ctx context.Context, p *model.Payment) error {
 	return nil
 }
 
-func (f *fakePaymentRepo) FindAllByClientID(ctx context.Context, clientID uint, filter repository.PaymentFilter) ([]model.Payment, error) {
-	f.capturedFilter = filter
-	if f.findAllErr != nil {
-		return nil, f.findAllErr
-	}
-	return f.allPayments, nil
-}
-
 func (f *fakePaymentRepo) FindByAccount(_ context.Context, _ string, _ *dto.PaymentFilters) ([]model.Payment, int64, error) {
 	return f.payments, f.total, f.findAccErr
 }

@@ -5,7 +5,6 @@ import (
 	"banking-service/internal/model"
 	"banking-service/internal/repository"
 	"bytes"
-	"common/pkg/auth"
 	"common/pkg/errors"
 	"context"
 	"fmt"
@@ -120,8 +119,11 @@ func (s *PaymentService) GetPaymentByID(ctx context.Context, id uint) (*model.Pa
 	}
 
 	payerAccount, err := s.accountRepo.FindByAccountNumber(ctx, payment.Transaction.PayerAccountNumber)
-	if err != nil || payerAccount.ClientID != *ac.ClientID {
-		return nil, errors.NotFoundErr("payment not found")
+	if payerAccount == nil {
+		return nil, errors.NotFoundErr("payer account not found")
+	}
+	if err != nil {
+		return nil, errors.InternalErr(err)
 	}
 
 	return payment, nil

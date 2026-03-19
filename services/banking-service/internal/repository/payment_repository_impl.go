@@ -37,35 +37,6 @@ func (r *paymentRepository) Update(ctx context.Context, payment *model.Payment) 
 	return r.db.WithContext(ctx).Save(payment).Error
 }
 
-func (r *paymentRepository) FindAllByClientID(ctx context.Context, clientID uint, filter PaymentFilter) ([]model.Payment, error) {
-	var payments []model.Payment
-
-	query := r.db.WithContext(ctx).
-		Joins("JOIN transactions ON transactions.transaction_id = payments.transaction_id").
-		Joins("JOIN accounts ON accounts.account_number = transactions.payer_account_number").
-		Where("accounts.client_id = ?", clientID).
-		Preload("Transaction")
-
-	if filter.DateFrom != nil {
-		query = query.Where("transactions.created_at >= ?", filter.DateFrom)
-	}
-	if filter.DateTo != nil {
-		query = query.Where("transactions.created_at <= ?", filter.DateTo)
-	}
-	if filter.AmountMin != nil {
-		query = query.Where("transactions.start_amount >= ?", filter.AmountMin)
-	}
-	if filter.AmountMax != nil {
-		query = query.Where("transactions.start_amount <= ?", filter.AmountMax)
-	}
-	if filter.Status != nil {
-		query = query.Where("transactions.status = ?", filter.Status)
-	}
-
-	err := query.Find(&payments).Error
-	return payments, err
-}
-
 func (r *paymentRepository) FindByAccount(ctx context.Context, accountNumber string, filters *dto.PaymentFilters) ([]model.Payment, int64, error) {
 	page := filters.Page
 	if page < 1 {

@@ -19,9 +19,6 @@ func NewPayeeService(repo repository.PayeeRepository) *PayeeService {
 
 func (s *PayeeService) GetAll(ctx context.Context) ([]model.Payee, error) {
 	ac := auth.GetAuthFromContext(ctx)
-	if ac == nil || ac.ClientID == nil {
-		return nil, errors.UnauthorizedErr("not authenticated as client")
-	}
 
 	payees, err := s.repo.FindAllByClientID(ctx, *ac.ClientID)
 	if err != nil {
@@ -32,9 +29,6 @@ func (s *PayeeService) GetAll(ctx context.Context) ([]model.Payee, error) {
 
 func (s *PayeeService) Create(ctx context.Context, req dto.CreatePayeeRequest) (*model.Payee, error) {
 	ac := auth.GetAuthFromContext(ctx)
-	if ac == nil || ac.ClientID == nil {
-		return nil, errors.UnauthorizedErr("not authenticated as client")
-	}
 
 	payee := &model.Payee{
 		ClientID:      *ac.ClientID,
@@ -51,9 +45,6 @@ func (s *PayeeService) Create(ctx context.Context, req dto.CreatePayeeRequest) (
 
 func (s *PayeeService) Update(ctx context.Context, id uint, req dto.UpdatePayeeRequest) (*model.Payee, error) {
 	ac := auth.GetAuthFromContext(ctx)
-	if ac == nil || ac.ClientID == nil {
-		return nil, errors.UnauthorizedErr("not authenticated as client")
-	}
 
 	payee, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -82,9 +73,6 @@ func (s *PayeeService) Update(ctx context.Context, id uint, req dto.UpdatePayeeR
 
 func (s *PayeeService) Delete(ctx context.Context, id uint) error {
 	ac := auth.GetAuthFromContext(ctx)
-	if ac == nil || ac.ClientID == nil {
-		return errors.UnauthorizedErr("not authenticated as client")
-	}
 
 	payee, err := s.repo.FindByID(ctx, id)
 	if err != nil {

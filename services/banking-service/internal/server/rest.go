@@ -148,7 +148,7 @@ func SetupRoutes(
 		}
 
 
-		clientLoans := api.Group("/clients/:client_id/loans")
+		clientLoans := api.Group("/client/:client_id/loans")
 		clientLoans.Use(auth.Middleware(verifier, permissions))
 		{
 			clientLoans.GET("", loanHandler.GetLoans)
