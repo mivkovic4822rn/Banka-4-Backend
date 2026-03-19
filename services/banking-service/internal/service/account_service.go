@@ -15,12 +15,13 @@ import (
 )
 
 type AccountService struct {
-	repo             repository.AccountRepository
-  currencyRepo     repository.CurrencyRepository
-	verificationRepo repository.VerificationTokenRepository
-	userClient       client.UserClient
-  cardService      *CardService
-  exchangeService CurrencyConverter
+	repo               repository.AccountRepository
+	currencyRepo       repository.CurrencyRepository
+	verificationRepo   repository.VerificationTokenRepository
+	userClient         client.UserClient
+	cardService        *CardService
+	mobileSecretClient client.MobileSecretClient
+	exchangeService    CurrencyConverter
 }
 
 func NewAccountService(
@@ -29,15 +30,17 @@ func NewAccountService(
 	verificationRepo repository.VerificationTokenRepository,
 	userClient client.UserClient,
 	cardService *CardService,
+	mobileSecretClient client.MobileSecretClient,
 	exchangeService CurrencyConverter,
 ) *AccountService {
 	return &AccountService{
-		repo:            repo,
-		currencyRepo:    currencyRepo,
-    verificationRepo: verificationRepo,
-		userClient:      userClient,
-		cardService:     cardService,
-		exchangeService: exchangeService,
+		repo:               repo,
+		currencyRepo:       currencyRepo,
+		verificationRepo:   verificationRepo,
+		userClient:         userClient,
+		cardService:        cardService,
+		mobileSecretClient: mobileSecretClient,
+		exchangeService:    exchangeService,
 	}
 }
 
@@ -225,7 +228,7 @@ func (s *AccountService) RequestLimitsChange(ctx context.Context, accountNumber 
 	return code, nil
 }
 
-func (s *AccountService) ConfirmLimitsChange(ctx context.Context, accountNumber string, clientID uint, code string) error {
+func (s *AccountService) ConfirmLimitsChange(ctx context.Context, accountNumber string, clientID uint, code, authorizationHeader string) error {
 
 	token, err := s.verificationRepo.FindByAccountAndClient(ctx, accountNumber, clientID)
 	if err != nil {
@@ -236,8 +239,12 @@ func (s *AccountService) ConfirmLimitsChange(ctx context.Context, accountNumber 
 		return errors.BadRequestErr("verification code has expired")
 	}
 
-	if code == "1234" { //cheat code for debug until mobile verification is implemented
-	} else if token.Code != code {
+	secret, err := s.mobileSecretClient.GetMobileSecret(ctx, authorizationHeader)
+	if err != nil {
+		return errors.ServiceUnavailableErr(err)
+	}
+
+	if !verifyTOTPCode(secret, code, time.Now(), totpAllowedSkew) {
 		return errors.BadRequestErr("invalid verification code")
 	}
 

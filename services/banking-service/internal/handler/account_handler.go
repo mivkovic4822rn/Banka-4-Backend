@@ -4,9 +4,10 @@ import (
 	"banking-service/internal/dto"
 	"banking-service/internal/service"
 	"common/pkg/errors"
-	"github.com/gin-gonic/gin"
 	"net/http"
 	"strconv"
+
+	"github.com/gin-gonic/gin"
 )
 
 type AccountHandler struct {
@@ -201,7 +202,7 @@ func (h *AccountHandler) RequestLimitsChange(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param accountNumber path string true "Account number"
-// @Param request body dto.ConfirmLimitsChangeRequest true "Verification code, you can use 1234 for testing but still needs request to be made first"
+// @Param request body dto.ConfirmLimitsChangeRequest true "Verification code generated in mobile app"
 // @Success 200
 // @Failure 400 {object} errors.AppError
 // @Failure 403 {object} errors.AppError
@@ -222,7 +223,7 @@ func (h *AccountHandler) ConfirmLimitsChange(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.ConfirmLimitsChange(c.Request.Context(), accountNumber, clientId, req.Code); err != nil {
+	if err := h.service.ConfirmLimitsChange(c.Request.Context(), accountNumber, clientId, req.Code, c.GetHeader("Authorization")); err != nil {
 		c.Error(err)
 		return
 	}
