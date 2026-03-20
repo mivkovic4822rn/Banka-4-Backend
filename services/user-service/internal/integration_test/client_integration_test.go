@@ -21,6 +21,9 @@ func TestClientRegister(t *testing.T) {
 
 	db := setupTestDB(t)
 	router := setupTestRouter(t, db)
+	position := seedPosition(t, db)
+	empIdentity, _ := seedEmployee(t, db, position.PositionID)
+	empAuth := authHeader(t, empIdentity.ID)
 
 	email := fmt.Sprintf("client-%d@example.com", uniqueCounter.Add(1))
 	username := fmt.Sprintf("client-%d", uniqueCounter.Add(1))
@@ -34,7 +37,7 @@ func TestClientRegister(t *testing.T) {
 		"username":      username,
 		"phone_number":  "0601111111",
 		"address":       "Client Street 1",
-	}, "")
+	}, empAuth)
 
 	requireStatus(t, recorder, http.StatusCreated)
 
@@ -58,6 +61,9 @@ func TestClientRegisterActivateAndLogin(t *testing.T) {
 
 	db := setupTestDB(t)
 	router := setupTestRouter(t, db)
+	position := seedPosition(t, db)
+	empIdentity, _ := seedEmployee(t, db, position.PositionID)
+	empAuth := authHeader(t, empIdentity.ID)
 
 	email := fmt.Sprintf("clientauth-%d@example.com", uniqueCounter.Add(1))
 	username := fmt.Sprintf("clientauth-%d", uniqueCounter.Add(1))
@@ -71,7 +77,7 @@ func TestClientRegisterActivateAndLogin(t *testing.T) {
 		"username":      username,
 		"phone_number":  "0602222222",
 		"address":       "Client Street 2",
-	}, "")
+	}, empAuth)
 	requireStatus(t, register, http.StatusCreated)
 
 	var identity model.Identity
@@ -106,6 +112,7 @@ func TestClientRegisterActivateAndLogin(t *testing.T) {
 	}
 	assert.Nil(t, claims.EmployeeID)
 }
+
 type clientResponse struct {
 	ClientID    uint   `json:"ClientID"`
 	FirstName   string `json:"FirstName"`
@@ -128,6 +135,7 @@ func TestListClients(t *testing.T) {
 
 	viewerIdentity, _ := seedEmployeeWithPermissions(t, db, position.PositionID, permission.ClientView)
 	noPermIdentity, _ := seedEmployee(t, db, position.PositionID)
+	registerAuth := authHeader(t, viewerIdentity.ID)
 
 	email1 := fmt.Sprintf("list-client-%d@example.com", uniqueCounter.Add(1))
 	username1 := fmt.Sprintf("list-client-%d", uniqueCounter.Add(1))
@@ -143,7 +151,7 @@ func TestListClients(t *testing.T) {
 		"username":      username1,
 		"phone_number":  "0601111111",
 		"address":       "Street 1",
-	}, "")
+	}, registerAuth)
 
 	performRequest(t, router, http.MethodPost, "/api/clients/register", map[string]any{
 		"first_name":    "Ana",
@@ -154,7 +162,7 @@ func TestListClients(t *testing.T) {
 		"username":      username2,
 		"phone_number":  "0602222222",
 		"address":       "Street 2",
-	}, "")
+	}, registerAuth)
 
 	testCases := []struct {
 		name         string
@@ -245,6 +253,7 @@ func TestUpdateClient(t *testing.T) {
 
 	updaterIdentity, _ := seedEmployeeWithPermissions(t, db, position.PositionID, permission.ClientUpdate)
 	noPermIdentity, _ := seedEmployee(t, db, position.PositionID)
+	registerAuth := authHeader(t, updaterIdentity.ID)
 
 	email := fmt.Sprintf("update-client-%d@example.com", uniqueCounter.Add(1))
 	username := fmt.Sprintf("update-client-%d", uniqueCounter.Add(1))
@@ -258,7 +267,7 @@ func TestUpdateClient(t *testing.T) {
 		"username":      username,
 		"phone_number":  "0601111111",
 		"address":       "Street 1",
-	}, "")
+	}, registerAuth)
 
 	var client model.Client
 	require.NoError(t, db.

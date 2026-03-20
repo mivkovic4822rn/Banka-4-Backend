@@ -274,6 +274,9 @@ func authHeader(t *testing.T, identityID uint, employeeID ...uint) string {
 func uniqueValue(t *testing.T, prefix string) string {
 	t.Helper()
 	name := strings.NewReplacer("/", "-", " ", "-", ":", "-").Replace(strings.ToLower(t.Name()))
+	if len(name) > 15 {
+		name = name[:15]
+	}
 	return fmt.Sprintf("%s-%s-%d-%d", prefix, name, time.Now().UnixNano(), uniqueCounter.Add(1))
 }
 
