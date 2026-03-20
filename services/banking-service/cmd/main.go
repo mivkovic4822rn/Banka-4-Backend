@@ -85,6 +85,7 @@ func main() {
 			service.NewCardService,
 			service.NewEmailService,
 			service.NewLoanService,
+			service.NewLoanScheduler,
 			handler.NewAccountHandler,
 			handler.NewCompanyHandler,
 			handler.NewPayeeHandler,
@@ -119,7 +120,8 @@ func main() {
 				&model.VerificationToken{},
 				&model.LoanType{},
 				&model.LoanRequest{},
-				&model.VerificationToken{},
+				&model.Loan{},
+				&model.LoanInstallment{},
 			); err != nil {
 				return err
 			}
@@ -130,6 +132,14 @@ func main() {
 				OnStart: func(ctx context.Context) error {
 					svc.Initialize(ctx)
 					svc.StartBackgroundRefresh(ctx)
+					return nil
+				},
+			})
+		}),
+		fx.Invoke(func(lc fx.Lifecycle, scheduler *service.LoanScheduler) {
+			lc.Append(fx.Hook{
+				OnStart: func(ctx context.Context) error {
+					scheduler.Start(ctx)
 					return nil
 				},
 			})

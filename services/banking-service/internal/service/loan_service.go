@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"math"
+	"math/rand"
+	"time"
 
 	"banking-service/internal/dto"
 	"banking-service/internal/model"
@@ -14,17 +16,20 @@ type LoanService struct {
 	accountRepo  repository.AccountRepository
 	loanTypeRepo repository.LoanTypeRepository
 	loanRepo     repository.LoanRepository
+	txProcessor  *TransactionProcessor
 }
 
 func NewLoanService(
 	accountRepo repository.AccountRepository,
 	loanTypeRepo repository.LoanTypeRepository,
 	loanRepo repository.LoanRepository,
+	txProcessor *TransactionProcessor,
 ) *LoanService {
 	return &LoanService{
 		accountRepo:  accountRepo,
 		loanTypeRepo: loanTypeRepo,
 		loanRepo:     loanRepo,
+		txProcessor:  txProcessor,
 	}
 }
 
@@ -188,8 +193,89 @@ func (s *LoanService) ApproveLoanRequest(ctx context.Context, id uint) error {
 		return errors.BadRequestErr("loan request is not pending")
 	}
 
+	clientAccount, err := s.accountRepo.FindByAccountNumber(ctx, request.AccountNumber)
+	if err != nil {
+		return errors.InternalErr(err)
+	}
+	if clientAccount == nil {
+		return errors.BadRequestErr("client account not found")
+	}
+
+	bankAccountNumber, ok := BankAccounts[clientAccount.Currency.Code]
+	if !ok {
+		return errors.BadRequestErr("no bank account for this currency")
+	}
+
+	bankAccount, err := s.accountRepo.FindByAccountNumber(ctx, bankAccountNumber)
+	if err != nil {
+		return errors.InternalErr(err)
+	}
+	if bankAccount == nil {
+		return errors.InternalErr(errors.BadRequestErr("bank account not found"))
+	}
+
+	if bankAccount.AvailableBalance < request.Amount {
+		return errors.BadRequestErr("insufficient bank funds to approve loan")
+	}
+
+	transaction := &model.Transaction{
+		PayerAccountNumber:     bankAccountNumber,
+		RecipientAccountNumber: request.AccountNumber,
+		StartAmount:            request.Amount,
+		StartCurrencyCode:      clientAccount.Currency.Code,
+		EndAmount:              request.Amount,
+		EndCurrencyCode:        clientAccount.Currency.Code,
+		Status:                 model.TransactionProcessing,
+	}
+	if err := s.txProcessor.transactionRepo.Create(ctx, transaction); err != nil {
+		return errors.InternalErr(err)
+	}
+
+	if err := s.txProcessor.Process(ctx, transaction.TransactionID); err != nil {
+		return errors.InternalErr(err)
+	}
+
 	request.Status = model.LoanRequestApproved
-	return s.loanRepo.Update(ctx, request)
+	if err := s.loanRepo.Update(ctx, request); err != nil {
+		return errors.InternalErr(err)
+	}
+
+	now := time.Now()
+	firstInstallmentDate := time.Date(now.Year(), now.Month()+1, now.Day(), 0, 0, 0, 0, time.UTC)
+
+	loan := &model.Loan{
+		LoanRequestID:       request.ID,
+		TransactionID:       &transaction.TransactionID,
+		MonthlyInstallment:  request.MonthlyInstallment,
+		InterestRate:        request.CalculatedRate,
+		IsVariableRate:      false,
+		RepaymentPeriod:     request.RepaymentPeriod,
+		PaidInstallments:    0,
+		StartDate:           now,
+		NextInstallmentDate: firstInstallmentDate,
+		Status:              model.LoanStatusActive,
+	}
+	if err := s.loanRepo.CreateLoan(ctx, loan); err != nil {
+		return errors.InternalErr(err)
+	}
+
+	installments := make([]model.LoanInstallment, request.RepaymentPeriod)
+	for i := 0; i < request.RepaymentPeriod; i++ {
+		dueDate := time.Date(now.Year(), now.Month()+time.Month(i+1), now.Day(), 0, 0, 0, 0, time.UTC)
+		installments[i] = model.LoanInstallment{
+			LoanID:            loan.ID,
+			InstallmentNumber: i + 1,
+			Amount:            request.MonthlyInstallment,
+			InterestRate:      request.CalculatedRate,
+			DueDate:           dueDate,
+			Status:            model.InstallmentStatusPending,
+		}
+	}
+	if err := s.loanRepo.CreateInstallments(ctx, installments); err != nil {
+		return errors.InternalErr(err)
+	}
+
+	return nil
 }
 
 func (s *LoanService) RejectLoanRequest(ctx context.Context, id uint) error {
@@ -208,4 +294,47 @@ func (s *LoanService) RejectLoanRequest(ctx context.Context, id uint) error {
 
 	request.Status = model.LoanRequestRejected
 	return s.loanRepo.Update(ctx, request)
+}
+
+// AdjustVariableRates mesecno azurira kamatnu stopu za varijabilne kredite.
+// Poziva se iz LoanScheduler-a jednom mesecno.
+func (s *LoanService) AdjustVariableRates(ctx context.Context) error {
+	loans, err := s.loanRepo.FindActiveVariableRateLoans(ctx)
+	if err != nil {
+		return errors.InternalErr(err)
+	}
+
+	for i := range loans {
+		loan := &loans[i]
+
+		// slucajna promena u opsegu [-1.5%, +1.5%]
+		adjustment := rand.Float64()*3.0 - 1.5
+		newRate := math.Round((loan.InterestRate+adjustment)*100) / 100
+		if newRate < 0 {
+			newRate = 0
+		}
+
+		// preracunavamo ratu za preostali period otplate
+		remaining := loan.RepaymentPeriod - loan.PaidInstallments
+		newInstallment := s.CalculateMonthlyInstallment(loan.RemainingDebt, newRate, remaining)
+
+		loan.InterestRate = newRate
+		loan.MonthlyInstallment = newInstallment
+
+		if err := s.loanRepo.UpdateLoan(ctx, loan); err != nil {
+			continue
+		}
+
+		// azuriramo iznos i kamatu za sve buducе rate
+		for j := range loan.Installments {
+			inst := &loan.Installments[j]
+			if inst.Status == model.InstallmentStatusPending || inst.Status == model.InstallmentStatusRetrying {
+				inst.Amount = newInstallment
+				inst.InterestRate = newRate
+				_ = s.loanRepo.UpdateInstallment(ctx, inst)
+			}
+		}
+	}
+
+	return nil
 }
