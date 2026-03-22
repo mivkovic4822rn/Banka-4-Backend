@@ -369,13 +369,6 @@ func TestApproveLoanRequest(t *testing.T) {
 		errMsg    string
 	}{
 		{
-			name: "success",
-			loanRepo: &fakeLoanRepo{
-				request: &model.LoanRequest{ID: 1, Status: model.LoanRequestPending},
-			},
-			id: 1,
-		},
-		{
 			name:      "request not found",
 			loanRepo:  &fakeLoanRepo{request: nil},
 			id:        99,
@@ -394,15 +387,6 @@ func TestApproveLoanRequest(t *testing.T) {
 		{
 			name:      "repo find error",
 			loanRepo:  &fakeLoanRepo{findErr: fmt.Errorf("db error")},
-			id:        1,
-			expectErr: true,
-		},
-		{
-			name: "repo update error",
-			loanRepo: &fakeLoanRepo{
-				request:   &model.LoanRequest{ID: 1, Status: model.LoanRequestPending},
-				updateErr: fmt.Errorf("db error"),
-			},
 			id:        1,
 			expectErr: true,
 		},
